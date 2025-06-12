@@ -185,10 +185,9 @@
             players.forEach((player, index) => {
                 const card = document.createElement('div');
                 card.id = `player-${index}-card`;
-                // Added relative positioning to the card for the absolute buff indicator
                 card.className = 'player-card border-2 border-transparent rounded-lg p-3 text-center bg-gray-800 shadow-lg relative';
                 card.innerHTML = `
-                    <div id="player-${index}-buff" class="absolute top-1 right-1"></div> <!-- Buff indicator container -->
+                    <div id="player-${index}-buff" class="absolute top-1 right-1"></div>
                     <p class="text-3xl">${player.avatar}</p>
                     <p class="font-semibold text-sm text-gray-300">${player.name}</p>
                     <p id="player-${index}-score" class="text-2xl font-bold text-white">${player.score}</p>
@@ -201,15 +200,13 @@
             players.forEach((player, index) => {
                 document.getElementById(`player-${index}-score`).textContent = player.score;
                 const cardEl = document.getElementById(`player-${index}-card`);
-                const buffEl = document.getElementById(`player-${index}-buff`); // Get the buff element
-
-                // *** FEATURE START: Update buff indicator ***
+                const buffEl = document.getElementById(`player-${index}-buff`);
+                
                 if (player.hasDoubleBuff) {
                     buffEl.innerHTML = `<span class="bg-cyan-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">더블!🚀</span>`;
                 } else {
-                    buffEl.innerHTML = ''; // Clear the indicator if no buff
+                    buffEl.innerHTML = '';
                 }
-                // *** FEATURE END ***
                 
                 const isActive = index === currentPlayerIndex;
                 cardEl.style.borderColor = isActive ? '#a855f7' : 'transparent';
@@ -222,6 +219,21 @@
                 activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
             }
         }
+        
+        // *** BUG FIX START ***
+        // Removed the faulty `if (!gameActive)` check. 
+        // This function's job is just to apply the score and check for a winner.
+        // The `gameActive` state is managed by `rollDice` and `nextTurn`.
+        function applyScoreAndCheckWin(playerIndex, score) {
+            players[playerIndex].score += score;
+            updateUI();
+            if (players[playerIndex].score >= winScore) {
+                showWinPopup(playerIndex);
+                return true; // Game is over
+            }
+            return false; // Game continues
+        }
+        // *** BUG FIX END ***
 
         function rollDice() {
             if (!gameActive) return;
@@ -248,56 +260,59 @@
                 
                 if(currentPlayer.hasDoubleBuff) {
                     rollResultEl.innerHTML = `<p class="text-2xl font-bold text-cyan-400">🚀 더블! ${sum} x 2 = ${scoreToAdd}점!</p>`;
-                    currentPlayer.hasDoubleBuff = false; // Consume buff
+                    currentPlayer.hasDoubleBuff = false; 
                 } else {
                     rollResultEl.innerHTML = `<p class="text-2xl font-bold">${d1} + ${d2} = <span class="text-fuchsia-400">${sum}</span></p>`;
                 }
                 
-                currentPlayer.score += scoreToAdd;
-                updateUI();
-                
-                if (currentPlayer.score >= winScore) {
-                    showWinPopup(currentPlayerIndex);
-                } else if (penaltyNumbers.includes(sum)) {
-                    triggerRandomMission();
+                if (penaltyNumbers.includes(sum)) {
+                    triggerRandomMission(scoreToAdd);
                 } else {
-                    nextTurn();
+                    if(!applyScoreAndCheckWin(currentPlayerIndex, scoreToAdd)){
+                       nextTurn();
+                    }
                 }
             }, 700);
         }
 
         function nextTurn() {
-            if(winPopup.classList.contains('hidden')) {
+            if (winPopup.classList.contains('hidden')) {
+                gameActive = true; 
                 currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
                 updateUI();
-                gameActive = true;
                 rollBtn.disabled = false;
                 rollBtn.textContent = '가보자고! 🎲';
             }
         }
         
-        function triggerRandomMission() {
+        function triggerRandomMission(scoreFromRoll) {
             const mission = missions[Math.floor(Math.random() * missions.length)];
             missionTitle.textContent = mission.title;
             missionMessage.textContent = mission.text;
             missionOptions.innerHTML = '';
             
-            closeMissionBtn.textContent = "확인";
             missionActionButtons.style.display = 'flex';
 
             if (mission.category === 'drink') {
                 blackKnightBtn.style.display = 'block';
                 closeMissionBtn.textContent = "벌칙 받기 😈";
-                blackKnightBtn.onclick = () => callBlackKnight();
+                blackKnightBtn.onclick = () => callBlackKnight(scoreFromRoll);
                 closeMissionBtn.onclick = () => {
                     missionPopup.classList.add('hidden');
-                    nextTurn();
+                    if (!applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll)) {
+                        nextTurn();
+                    }
                 };
             } else {
                 blackKnightBtn.style.display = 'none';
+                closeMissionBtn.textContent = "확인";
                 closeMissionBtn.onclick = () => {
-                    missionPopup.classList.add('hidden');
-                    nextTurn();
+                     missionPopup.classList.add('hidden');
+                     if(mission.type !== 'target'){
+                        if (!applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll)) {
+                            nextTurn();
+                        }
+                     }
                 };
             }
             
@@ -305,11 +320,16 @@
                 case 'target':
                     missionActionButtons.style.display = 'none';
                     let targets = players.filter((p, i) => i !== currentPlayerIndex);
-                    targets.forEach((target, index) => {
+                    targets.forEach((target) => {
                         const btn = document.createElement('button');
                         btn.className = 'w-full text-left p-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors';
                         btn.textContent = `${target.avatar} ${target.name} (${target.score}점)`;
                         btn.onclick = () => {
+                            missionPopup.classList.add('hidden');
+                            
+                            let gameOver = applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll);
+                            if (gameOver) return;
+
                             if (mission.id === 'steal') {
                                 let stolenScore = Math.min(target.score, 15);
                                 players[currentPlayerIndex].score += stolenScore;
@@ -317,29 +337,30 @@
                             } else if (mission.id === 'drink_select') {
                                 rollResultEl.innerHTML = `<p class="text-xl font-bold text-pink-400">${players[currentPlayerIndex].name}님과 ${target.name}님이 함께 원샷!</p>`;
                             }
-                            missionPopup.classList.add('hidden');
-                            updateUI();
-                            nextTurn();
+                            
+                            if(!applyScoreAndCheckWin(currentPlayerIndex, 0)) { 
+                                nextTurn();
+                            }
                         };
                         missionOptions.appendChild(btn);
                     });
                     break;
                 case 'buff':
-                    if (mission.id === 'double') {
-                         players[currentPlayerIndex].hasDoubleBuff = true;
-                         updateUI(); // Show buff immediately
-                    }
+                    if (mission.id === 'double') players[currentPlayerIndex].hasDoubleBuff = true;
+                    updateUI(); 
                     break;
                 case 'debuff':
                     if (mission.id === 'reset_one') {
-                        let maxScore = -1;
+                        let maxScore = 0;
                         let targetIndex = -1;
                         players.forEach((p, i) => {
                             if (p.score > maxScore) { maxScore = p.score; targetIndex = i; }
                         });
                         if (targetIndex !== -1) {
                            players[targetIndex].score = 0;
-                           missionMessage.textContent = `${players[targetIndex].name}님의 점수가 0이 되었습니다.`
+                           missionMessage.textContent = `최고점 플레이어 ${players[targetIndex].name}님의 점수가 0이 되었습니다!`;
+                        } else {
+                           missionMessage.textContent = `모두 0점이라 초기화할 점수가 없습니다!`;
                         }
                     }
                     updateUI();
@@ -349,21 +370,25 @@
             missionPopup.classList.remove('hidden');
         }
 
-        function callBlackKnight() {
+        function callBlackKnight(scoreFromRoll) {
             missionTitle.textContent = "흑기사 모집! ⚔️";
-            missionMessage.textContent = "누가 대신 미션을 수행하시겠습니까?";
+            missionMessage.textContent = `누가 벌칙을 대신 받고 ${scoreFromRoll}점을 획득하시겠습니까?`;
             missionActionButtons.style.display = 'none';
             missionOptions.innerHTML = '';
 
             let potentialKnights = players.filter((p, i) => i !== currentPlayerIndex);
-            potentialKnights.forEach(knight => {
+            potentialKnights.forEach((knight) => {
+                const knightIndex = players.findIndex(p => p.name === knight.name);
                 const btn = document.createElement('button');
                 btn.className = 'w-full text-left p-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors';
                 btn.textContent = `${knight.avatar} ${knight.name}`;
                 btn.onclick = () => {
                     missionPopup.classList.add('hidden');
-                    rollResultEl.innerHTML = `<p class="text-xl font-bold text-green-400">흑기사 등장! ${knight.name}님이 대신 수행!</p>`;
-                    setTimeout(() => nextTurn(), 2000);
+                    rollResultEl.innerHTML = `<p class="text-xl font-bold text-green-400">흑기사 ${knight.name}님이 ${scoreFromRoll}점 획득!</p>`;
+                    
+                    if (!applyScoreAndCheckWin(knightIndex, scoreFromRoll)) {
+                        setTimeout(() => nextTurn(), 1500); 
+                    }
                 };
                 missionOptions.appendChild(btn);
             });
