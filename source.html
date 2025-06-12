@@ -220,20 +220,15 @@
             }
         }
         
-        // *** BUG FIX START ***
-        // Removed the faulty `if (!gameActive)` check. 
-        // This function's job is just to apply the score and check for a winner.
-        // The `gameActive` state is managed by `rollDice` and `nextTurn`.
         function applyScoreAndCheckWin(playerIndex, score) {
             players[playerIndex].score += score;
             updateUI();
             if (players[playerIndex].score >= winScore) {
                 showWinPopup(playerIndex);
-                return true; // Game is over
+                return true; 
             }
-            return false; // Game continues
+            return false; 
         }
-        // *** BUG FIX END ***
 
         function rollDice() {
             if (!gameActive) return;
@@ -256,18 +251,19 @@
                 dice2El.innerHTML = `<i class="fas fa-dice-${diceIcons[d2 - 1]}"></i>`;
 
                 let currentPlayer = players[currentPlayerIndex];
-                let scoreToAdd = currentPlayer.hasDoubleBuff ? sum * 2 : sum;
+                const isDouble = currentPlayer.hasDoubleBuff;
+                let scoreToAdd = isDouble ? sum * 2 : sum;
                 
-                if(currentPlayer.hasDoubleBuff) {
+                if(isDouble) {
                     rollResultEl.innerHTML = `<p class="text-2xl font-bold text-cyan-400">🚀 더블! ${sum} x 2 = ${scoreToAdd}점!</p>`;
-                    currentPlayer.hasDoubleBuff = false; 
                 } else {
                     rollResultEl.innerHTML = `<p class="text-2xl font-bold">${d1} + ${d2} = <span class="text-fuchsia-400">${sum}</span></p>`;
                 }
                 
                 if (penaltyNumbers.includes(sum)) {
-                    triggerRandomMission(scoreToAdd);
+                    triggerRandomMission(scoreToAdd, isDouble);
                 } else {
+                    if (isDouble) currentPlayer.hasDoubleBuff = false;
                     if(!applyScoreAndCheckWin(currentPlayerIndex, scoreToAdd)){
                        nextTurn();
                     }
@@ -285,20 +281,27 @@
             }
         }
         
-        function triggerRandomMission(scoreFromRoll) {
+        function triggerRandomMission(scoreFromRoll, isDouble) {
             const mission = missions[Math.floor(Math.random() * missions.length)];
             missionTitle.textContent = mission.title;
-            missionMessage.textContent = mission.text;
-            missionOptions.innerHTML = '';
             
+            let originalMissionText = mission.text;
+            if (isDouble && mission.category === 'drink') {
+                missionMessage.textContent = originalMissionText + " (벌칙도 더블! 😈)";
+            } else {
+                missionMessage.textContent = originalMissionText;
+            }
+
+            missionOptions.innerHTML = '';
             missionActionButtons.style.display = 'flex';
 
             if (mission.category === 'drink') {
                 blackKnightBtn.style.display = 'block';
                 closeMissionBtn.textContent = "벌칙 받기 😈";
-                blackKnightBtn.onclick = () => callBlackKnight(scoreFromRoll);
+                blackKnightBtn.onclick = () => callBlackKnight(scoreFromRoll, isDouble);
                 closeMissionBtn.onclick = () => {
                     missionPopup.classList.add('hidden');
+                    if (isDouble) players[currentPlayerIndex].hasDoubleBuff = false;
                     if (!applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll)) {
                         nextTurn();
                     }
@@ -308,6 +311,7 @@
                 closeMissionBtn.textContent = "확인";
                 closeMissionBtn.onclick = () => {
                      missionPopup.classList.add('hidden');
+                     if (isDouble) players[currentPlayerIndex].hasDoubleBuff = false;
                      if(mission.type !== 'target'){
                         if (!applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll)) {
                             nextTurn();
@@ -326,6 +330,7 @@
                         btn.textContent = `${target.avatar} ${target.name} (${target.score}점)`;
                         btn.onclick = () => {
                             missionPopup.classList.add('hidden');
+                            if (isDouble) players[currentPlayerIndex].hasDoubleBuff = false;
                             
                             let gameOver = applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll);
                             if (gameOver) return;
@@ -366,13 +371,14 @@
                     updateUI();
                     break;
             }
-
             missionPopup.classList.remove('hidden');
         }
 
-        function callBlackKnight(scoreFromRoll) {
+        function callBlackKnight(scoreFromRoll, isDouble) {
             missionTitle.textContent = "흑기사 모집! ⚔️";
-            missionMessage.textContent = `누가 벌칙을 대신 받고 ${scoreFromRoll}점을 획득하시겠습니까?`;
+            let message = `누가 벌칙을 대신 받고 <span class="text-cyan-400 font-bold">${scoreFromRoll}점</span>을 획득하시겠습니까?`;
+            missionMessage.innerHTML = message;
+
             missionActionButtons.style.display = 'none';
             missionOptions.innerHTML = '';
 
@@ -384,6 +390,8 @@
                 btn.textContent = `${knight.avatar} ${knight.name}`;
                 btn.onclick = () => {
                     missionPopup.classList.add('hidden');
+                    if (isDouble) players[currentPlayerIndex].hasDoubleBuff = false;
+
                     rollResultEl.innerHTML = `<p class="text-xl font-bold text-green-400">흑기사 ${knight.name}님이 ${scoreFromRoll}점 획득!</p>`;
                     
                     if (!applyScoreAndCheckWin(knightIndex, scoreFromRoll)) {
