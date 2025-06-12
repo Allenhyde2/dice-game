@@ -148,13 +148,10 @@
 
         // Mission Cards Data
         const missions = [
-            // New Drinking Missions
             { id: 'drink_one', title: '🍻 원샷!', text: '깔끔하게 원샷!', type: 'penalty', category: 'drink' },
             { id: 'drink_two', title: '🍻 더블샷!', text: '두 잔을 연달아 드링킹!', type: 'penalty', category: 'drink' },
             { id: 'drink_love', title: '❤️ 러브샷', text: '오른쪽 사람과 러브샷하세요!', type: 'penalty', category: 'drink' },
             { id: 'drink_select', title: '👉 지목 원샷', text: '한 명을 지목해서 같이 원샷!', type: 'target', category: 'drink' },
-
-            // Existing Missions
             { id: 'steal', title: '😈 점수 뺏기', text: '한 명을 골라 15점을 뺏어옵니다.', type: 'target' },
             { id: 'double', title: '🚀 더블 찬스', text: '다음 턴에 굴리는 주사위 점수가 2배로 적용됩니다!', type: 'buff'},
             { id: 'reset_one', title: '😱 점수 초기화', text: '가장 점수가 높은 한 명의 점수를 0점으로 만듭니다.', type: 'debuff' },
@@ -188,8 +185,10 @@
             players.forEach((player, index) => {
                 const card = document.createElement('div');
                 card.id = `player-${index}-card`;
-                card.className = 'player-card border-2 border-transparent rounded-lg p-3 text-center bg-gray-800 shadow-lg';
+                // Added relative positioning to the card for the absolute buff indicator
+                card.className = 'player-card border-2 border-transparent rounded-lg p-3 text-center bg-gray-800 shadow-lg relative';
                 card.innerHTML = `
+                    <div id="player-${index}-buff" class="absolute top-1 right-1"></div> <!-- Buff indicator container -->
                     <p class="text-3xl">${player.avatar}</p>
                     <p class="font-semibold text-sm text-gray-300">${player.name}</p>
                     <p id="player-${index}-score" class="text-2xl font-bold text-white">${player.score}</p>
@@ -202,6 +201,15 @@
             players.forEach((player, index) => {
                 document.getElementById(`player-${index}-score`).textContent = player.score;
                 const cardEl = document.getElementById(`player-${index}-card`);
+                const buffEl = document.getElementById(`player-${index}-buff`); // Get the buff element
+
+                // *** FEATURE START: Update buff indicator ***
+                if (player.hasDoubleBuff) {
+                    buffEl.innerHTML = `<span class="bg-cyan-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">더블!🚀</span>`;
+                } else {
+                    buffEl.innerHTML = ''; // Clear the indicator if no buff
+                }
+                // *** FEATURE END ***
                 
                 const isActive = index === currentPlayerIndex;
                 cardEl.style.borderColor = isActive ? '#a855f7' : 'transparent';
@@ -237,15 +245,15 @@
 
                 let currentPlayer = players[currentPlayerIndex];
                 let scoreToAdd = currentPlayer.hasDoubleBuff ? sum * 2 : sum;
-                currentPlayer.score += scoreToAdd;
                 
                 if(currentPlayer.hasDoubleBuff) {
                     rollResultEl.innerHTML = `<p class="text-2xl font-bold text-cyan-400">🚀 더블! ${sum} x 2 = ${scoreToAdd}점!</p>`;
-                    currentPlayer.hasDoubleBuff = false;
+                    currentPlayer.hasDoubleBuff = false; // Consume buff
                 } else {
                     rollResultEl.innerHTML = `<p class="text-2xl font-bold">${d1} + ${d2} = <span class="text-fuchsia-400">${sum}</span></p>`;
                 }
                 
+                currentPlayer.score += scoreToAdd;
                 updateUI();
                 
                 if (currentPlayer.score >= winScore) {
@@ -306,6 +314,8 @@
                                 let stolenScore = Math.min(target.score, 15);
                                 players[currentPlayerIndex].score += stolenScore;
                                 target.score -= stolenScore;
+                            } else if (mission.id === 'drink_select') {
+                                rollResultEl.innerHTML = `<p class="text-xl font-bold text-pink-400">${players[currentPlayerIndex].name}님과 ${target.name}님이 함께 원샷!</p>`;
                             }
                             missionPopup.classList.add('hidden');
                             updateUI();
@@ -315,7 +325,10 @@
                     });
                     break;
                 case 'buff':
-                    if (mission.id === 'double') players[currentPlayerIndex].hasDoubleBuff = true;
+                    if (mission.id === 'double') {
+                         players[currentPlayerIndex].hasDoubleBuff = true;
+                         updateUI(); // Show buff immediately
+                    }
                     break;
                 case 'debuff':
                     if (mission.id === 'reset_one') {
