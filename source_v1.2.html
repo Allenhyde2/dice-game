@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>업그레이드 주사위 게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body, button {
+            font-family: 'Noto Sans KR', sans-serif;
+            touch-action: manipulation;
+        }
+        .app-container {
+            max-width: 420px;
+            height: 100vh;
+            max-height: 800px;
+            box-shadow: 0 0 40px rgba(79, 70, 229, 0.5); /* Indigo glow */
+            border-radius: 20px;
+            overflow: hidden;
+            border: 2px solid #4f46e5;
+        }
+        .neon-text {
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #f0abfc, 0 0 20px #f0abfc;
+        }
+        .neon-button {
+            background-image: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+            box-shadow: 0 0 10px #a855f7, 0 0 20px #a855f7;
+            transition: all 0.3s ease;
+        }
+        .neon-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px #a855f7, 0 0 30px #a855f7;
+        }
+        @keyframes roll {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(360deg) scale(1.3); }
+            100% { transform: rotate(720deg) scale(1); }
+        }
+        .dice-rolling { animation: roll 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes popup-appear {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .popup-enter { animation: popup-appear 0.3s ease-out forwards; }
+        .players-wrapper {
+            display: flex;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .players-wrapper::-webkit-scrollbar, .mission-list-container::-webkit-scrollbar { display: none; }
+        .mission-list-container { scrollbar-width: none; }
+        .player-card {
+            flex-shrink: 0;
+            width: 120px;
+            transition: all 0.3s ease;
+        }
+        .mission-card {
+             box-shadow: 0 0 15px #ec4899;
+             border: 2px solid #ec4899;
+        }
+        .popup-list-item {
+            transition: background-color 0.2s;
+        }
+        .straw {
+            width: 20px;
+            height: 100px;
+            background-color: #f59e0b; /* amber-500 */
+            border: 2px solid #fcd34d; /* amber-300 */
+            border-radius: 5px 5px 0 0;
+            margin: 0 5px;
+            cursor: pointer;
+            transition: transform 0.3s ease-in-out, background-color 0.3s;
+        }
+        .straw.drawn {
+            transform: translateY(-30px);
+            cursor: not-allowed;
+        }
+        .straw.win { background-color: #22c55e; border-color: #4ade80; } /* green-500 */
+        .straw.lose { background-color: #6b7280; border-color: #9ca3af; } /* gray-500 */
+    </style>
+</head>
+<body class="bg-gray-900 flex items-center justify-center p-4 h-screen">
+
+    <div class="app-container w-full h-full bg-gray-900 text-white flex flex-col relative">
+
+        <header class="p-4 text-center z-10">
+            <h1 class="text-2xl font-black neon-text">🔥 술자리 갓겜 🔥</h1>
+        </header>
+        
+        <div id="players-container" class="players-wrapper p-3 space-x-3"></div>
+
+        <main class="flex-grow flex flex-col items-center justify-center space-y-6 px-4">
+            <div class="flex space-x-6">
+                <div id="dice1" class="text-8xl text-white"><i class="fas fa-dice-one"></i></div>
+                <div id="dice2" class="text-8xl text-white"><i class="fas fa-dice-one"></i></div>
+            </div>
+            <div id="roll-result" class="text-center h-16 flex items-center justify-center">
+                <p class="text-xl font-medium text-gray-300">누구 차례? 가보자고!</p>
+            </div>
+        </main>
+        
+        <footer class="p-4 space-y-3 border-t border-gray-700">
+            <button id="rollBtn" class="w-full text-white font-bold py-4 px-6 rounded-xl text-xl neon-button">가보자고! 🎲</button>
+            <button id="resetBtn" class="w-full bg-gray-700 text-gray-300 font-bold py-2 px-4 rounded-lg hover:bg-gray-600">리셋</button>
+        </footer>
+
+        <!-- Generic Mission/Penalty Popup -->
+        <div id="missionPopup" class="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center p-6 hidden z-50">
+            <div class="bg-gray-800 rounded-2xl shadow-lg w-full max-w-sm text-center p-6 popup-enter mission-card">
+                <h2 id="missionTitle" class="text-2xl font-bold text-pink-400 mb-4"></h2>
+                <p id="missionMessage" class="text-gray-200 mb-6 min-h-[50px]"></p>
+                <div id="missionOptions" class="space-y-2 mb-4"></div>
+                <div id="missionActionButtons" class="flex space-x-2">
+                    <button id="blackKnightBtn" class="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-500">흑기사 호출 ⚔️</button>
+                    <button id="closeMissionBtn" class="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600">확인</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- King Game Level Selection Popup -->
+        <div id="kingGameLevelPopup" class="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center p-6 hidden z-50">
+            <div class="bg-gray-800 rounded-2xl shadow-lg w-full max-w-sm text-center p-6 popup-enter mission-card">
+                <h2 class="text-2xl font-bold text-amber-400 mb-4 neon-text">👑 명령 수위 고르기 👑</h2>
+                <div id="kingGameLevelOptions" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- King Game Mission Selection Popup -->
+        <div id="kingGameMissionPopup" class="absolute inset-0 bg-black bg-opacity-80 flex-col items-center justify-center p-6 hidden z-50">
+             <div class="bg-gray-800 rounded-2xl shadow-lg w-full max-w-sm text-center p-6 popup-enter mission-card">
+                <h2 id="kingGameMissionTitle" class="text-2xl font-bold text-amber-400 mb-4 neon-text">미션 고르기</h2>
+                <div id="kingGameMissionList" class="space-y-2 max-h-64 overflow-y-auto mission-list-container"></div>
+            </div>
+        </div>
+        
+        <!-- Straw Drawing Game Popup -->
+        <div id="strawGamePopup" class="absolute inset-0 bg-black bg-opacity-80 flex flex-col items-center justify-center p-6 hidden z-50">
+             <div class="bg-gray-800 rounded-2xl shadow-lg w-full max-w-sm text-center p-8 popup-enter mission-card">
+                <h2 id="strawGameTitle" class="text-2xl font-bold text-amber-400 mb-2 neon-text"></h2>
+                <p id="strawGameStatusText" class="text-gray-300 mb-4 h-6"></p>
+                <div id="strawCup" class="flex justify-center items-end h-32 my-4"></div>
+                <div id="strawGameResult" class="min-h-[50px] text-lg font-bold"></div>
+                <div id="strawGameEndButtons" class="flex space-x-2 mt-4">
+                    <button id="strawSuccessBtn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-500">성공</button>
+                    <button id="strawPunishBtn" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-500">벌주</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Win Popup -->
+        <div id="winPopup" class="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center p-6 hidden z-50">
+            <div class="bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm text-center p-8 popup-enter border-2 border-amber-400" style="box-shadow: 0 0 20px #f59e0b;">
+                <div class="text-7xl mb-4">👑</div>
+                <h2 class="text-3xl font-black text-amber-400 mb-2 neon-text">최종 KING 등극</h2>
+                <p id="winMessage" class="text-gray-200 mb-6 leading-relaxed"></p>
+                <button id="newGameFromWinBtn" class="w-full bg-amber-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-amber-600">새로운 판 시작</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const playersContainer = document.getElementById('players-container');
+        const dice1El = document.getElementById('dice1'), dice2El = document.getElementById('dice2');
+        const rollResultEl = document.getElementById('roll-result');
+        const rollBtn = document.getElementById('rollBtn'), resetBtn = document.getElementById('resetBtn');
+        const winPopup = document.getElementById('winPopup');
+        const winMessage = document.getElementById('winMessage');
+        const newGameFromWinBtn = document.getElementById('newGameFromWinBtn');
+        const missionPopup = document.getElementById('missionPopup');
+        const missionTitle = document.getElementById('missionTitle');
+        const missionMessage = document.getElementById('missionMessage');
+        const missionOptions = document.getElementById('missionOptions');
+        const missionActionButtons = document.getElementById('missionActionButtons');
+        const blackKnightBtn = document.getElementById('blackKnightBtn');
+        const closeMissionBtn = document.getElementById('closeMissionBtn');
+        const kingGameLevelPopup = document.getElementById('kingGameLevelPopup');
+        const kingGameLevelOptions = document.getElementById('kingGameLevelOptions');
+        const kingGameMissionPopup = document.getElementById('kingGameMissionPopup');
+        const kingGameMissionTitle = document.getElementById('kingGameMissionTitle');
+        const kingGameMissionList = document.getElementById('kingGameMissionList');
+        const strawGamePopup = document.getElementById('strawGamePopup');
+        const strawGameTitle = document.getElementById('strawGameTitle');
+        const strawGameStatusText = document.getElementById('strawGameStatusText');
+        const strawCup = document.getElementById('strawCup');
+        const strawGameResult = document.getElementById('strawGameResult');
+        const strawGameEndButtons = document.getElementById('strawGameEndButtons');
+        const strawSuccessBtn = document.getElementById('strawSuccessBtn');
+        const strawPunishBtn = document.getElementById('strawPunishBtn');
+
+        // Game State
+        const playerCount = 5;
+        let players = [];
+        let currentPlayerIndex = 0;
+        let gameActive = true;
+        const penaltyNumbers = [7, 8, 9];
+        const winScore = 100;
+        const diceIcons = ['one', 'two', 'three', 'four', 'five', 'six'];
+        const playerAvatars = ['😎', '😂', '😍', '🥳', '🤯'];
+
+        // Straw Game State
+        let kingOfTheTurn = -1;
+        let strawGameDrawers = [];
+        let strawGameCurrentDrawerIndex = 0;
+        let straws = [];
+        let strawGameWinners = [];
+        let drawnStrawIndices = new Set();
+        let strawGameType = '';
+        let strawGameScore = 0;
+        let strawGameIsDouble = false;
+        
+        // --- Data ---
+        const kingGameLevels = [
+            { level: 1, title: 'LV.1 맛보기', desc: '가벼운 스킨십과 귀여운 애교', color: 'bg-green-500' },
+            { level: 2, title: 'LV.2 두근두근', desc: '조금 더 대담한 스킨십과 재미', color: 'bg-sky-500' },
+            { level: 3, title: 'LV.3 아찔아찔', desc: '분위기를 후끈 달아오르게!', color: 'bg-yellow-500' },
+            { level: 4, title: 'LV.4 화끈화끈', desc: '오늘 밤, 잊을 수 없는 추억', color: 'bg-red-500' },
+        ];
+        const kingGameMissions = {
+            1: ["1번에게 윙크하기", "3번 어깨 주물러주기", "노래 한 소절 부르기", "물 한잔 마시기", "애교 3종 세트 보여주기", "왼쪽 사람과 손 잡고 5초 있기", "건배사 제의하기", "웃긴 표정 짓기", "첫사랑 썰 풀기", "최근에 본 영화 얘기하기"],
+            2: ["4번과 5초간 아이 컨택", "2번에게 사랑고백하기", "섹시 댄스 10초 추기", "가장 마음에 드는 사람에게 칭찬 3가지", "지금 바로 카톡 프사 바꾸기", "휴대폰 연락처 5번째 사람에게 '자니?' 보내기", "다같이 원샷하기", "옆 사람과 손가락 걸고 소원 들어주기", "이상형 월드컵 (이 자리에서)", "술 한잔 따라주기"],
+            3: ["1번과 3번 러브샷하기", "왕이 지목하는 두 사람 10초 포옹", "모든 사람에게 한 명씩 돌아가며 윙크", "SNS에 #술자리갓겜 태그와 함께 지금 사진 올리기", "가방에서 가장 이상한 물건 자랑하기", "전 연인에게 실수인 척 전화하기", "옆 사람 무릎에 10초 앉기", "다같이 한 발 들고 15초 버티기", "콜라, 사이다, 소주 섞어 마시기", "안주 하나 만들어주기"],
+            4: ["왕이 지목한 사람과 10초간 손깍지 끼기", "오른쪽 사람 허벅지에 5초간 손 올리기", "왼쪽 사람 볼에 뽀뽀하기", "마음에 드는 사람에게 백허그하기", "단 둘이 편의점 데이트 하고 오기", "서로 술 한잔 먹여주기", "빼빼로 게임하기", "이마에 뽀뽀하기", "한 사람 지목해서 폰 5분간 압수", "서로의 이상형 되어주기 10분"]
+        };
+        const missions = [
+            { id: 'drink_one', title: '🍻 원샷!', text: '깔끔하게 원샷!', type: 'penalty', category: 'drink' },
+            { id: 'drink_two', title: '🍻 더블샷!', text: '두 잔을 연달아 드링킹!', type: 'penalty', category: 'drink' },
+            { id: 'drink_love', title: '❤️ 러브샷', text: '오른쪽 사람과 러브샷하세요!', type: 'penalty', category: 'drink' },
+            { id: 'drink_select', title: '👉 지목 원샷', text: '한 명을 지목해서 같이 원샷!', type: 'target', category: 'drink' },
+            { id: 'steal', title: '😈 점수 뺏기', text: '한 명을 골라 15점을 뺏어옵니다.', type: 'target' },
+            { id: 'double', title: '🚀 더블 찬스', text: '다음 턴에 굴리는 주사위 점수가 2배로 적용됩니다!', type: 'buff'},
+            { id: 'reset_one', title: '😱 점수 초기화', text: '가장 점수가 높은 한 명의 점수를 0점으로 만듭니다.', type: 'debuff' },
+        ];
+        
+        // --- Core Functions ---
+        function initializeGame() {
+            players = Array.from({ length: playerCount }, (v, i) => ({ name: `Player ${i + 1}`, score: 0, avatar: playerAvatars[i], hasDoubleBuff: false }));
+            currentPlayerIndex = 0;
+            gameActive = true;
+            document.querySelectorAll('.absolute').forEach(el => el.classList.add('hidden'));
+            rollBtn.disabled = false;
+            rollBtn.className = "w-full text-white font-bold py-4 px-6 rounded-xl text-xl neon-button";
+            rollBtn.textContent = '가보자고! 🎲';
+            renderPlayerCards();
+            updateUI();
+            rollResultEl.innerHTML = `<p class="text-xl font-medium text-gray-300">누구 차례? 가보자고!</p>`;
+            dice1El.innerHTML = `<i class="fas fa-dice-one"></i>`;
+            dice2El.innerHTML = `<i class="fas fa-dice-one"></i>`;
+        }
+        
+        function renderPlayerCards() {
+            playersContainer.innerHTML = '';
+            players.forEach((player, index) => {
+                const card = document.createElement('div');
+                card.id = `player-${index}-card`;
+                card.className = 'player-card border-2 border-transparent rounded-lg p-3 text-center bg-gray-800 shadow-lg relative';
+                card.innerHTML = `<div id="player-${index}-buff" class="absolute top-1 right-1"></div><p class="text-3xl">${player.avatar}</p><p class="font-semibold text-sm text-gray-300">${player.name}</p><p id="player-${index}-score" class="text-2xl font-bold text-white">${player.score}</p>`;
+                playersContainer.appendChild(card);
+            });
+        }
+
+        function updateUI() {
+            players.forEach((player, index) => {
+                document.getElementById(`player-${index}-score`).textContent = player.score;
+                const buffEl = document.getElementById(`player-${index}-buff`);
+                if (player.hasDoubleBuff) buffEl.innerHTML = `<span class="bg-cyan-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">더블!🚀</span>`;
+                else buffEl.innerHTML = '';
+                const cardEl = document.getElementById(`player-${index}-card`);
+                const isActive = index === currentPlayerIndex;
+                cardEl.style.borderColor = isActive ? '#a855f7' : 'transparent';
+                cardEl.style.transform = isActive ? 'scale(1.1)' : 'scale(1)';
+                cardEl.style.boxShadow = isActive ? '0 0 15px #a855f7' : '';
+            });
+            const activeCard = document.getElementById(`player-${currentPlayerIndex}-card`);
+            if (activeCard) activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+        
+        function applyScoreAndCheckWin(playerIndex, score) {
+            players[playerIndex].score += score;
+            updateUI();
+            if (players[playerIndex].score >= winScore) { showWinPopup(playerIndex); return true; }
+            return false; 
+        }
+
+        function rollDice() {
+            if (!gameActive) return;
+            gameActive = false;
+            rollBtn.disabled = true;
+            rollBtn.textContent = '굴리는 중...';
+            dice1El.classList.add('dice-rolling');
+            dice2El.classList.add('dice-rolling');
+
+            setTimeout(() => {
+                dice1El.classList.remove('dice-rolling');
+                dice2El.classList.remove('dice-rolling');
+                let d1 = Math.floor(Math.random() * 6) + 1, d2 = Math.floor(Math.random() * 6) + 1, sum = d1 + d2;
+                dice1El.innerHTML = `<i class="fas fa-dice-${diceIcons[d1 - 1]}"></i>`;
+                dice2El.innerHTML = `<i class="fas fa-dice-${diceIcons[d2 - 1]}"></i>`;
+                let currentPlayer = players[currentPlayerIndex];
+                const isDoubleBuff = currentPlayer.hasDoubleBuff;
+                let scoreToAdd = isDoubleBuff ? sum * 2 : sum;
+                rollResultEl.innerHTML = isDoubleBuff ? `<p class="text-2xl font-bold text-cyan-400">🚀 더블! ${sum} x 2 = ${scoreToAdd}점!</p>` : `<p class="text-2xl font-bold">${d1} + ${d2} = <span class="text-fuchsia-400">${sum}</span></p>`;
+                
+                if (d1 === d2) {
+                    if (d1 === 2) { startKingGame(); return; }
+                    if (d1 === 5) { triggerSpecialMission('kiss', scoreToAdd, isDoubleBuff); return; }
+                    if (d1 === 6) { triggerSpecialMission('truthordare', scoreToAdd, isDoubleBuff); return; }
+                }
+                
+                if (penaltyNumbers.includes(sum)) triggerRandomMission(scoreToAdd, isDoubleBuff);
+                else { if (isDoubleBuff) currentPlayer.hasDoubleBuff = false; if(!applyScoreAndCheckWin(currentPlayerIndex, scoreToAdd)) nextTurn(); }
+            }, 700);
+        }
+
+        function nextTurn() {
+            if (winPopup.classList.contains('hidden')) {
+                gameActive = true; 
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+                updateUI();
+                rollBtn.disabled = false;
+                rollBtn.textContent = '가보자고! 🎲';
+            }
+        }
+        
+        function triggerSpecialMission(type, score, isDouble) {
+            let title = '', message = '';
+            closeMissionBtn.onclick = null; // Clear previous listener
+            missionOptions.innerHTML = '';
+            blackKnightBtn.style.display = 'none';
+            missionActionButtons.style.display = 'flex';
+            
+            switch(type) {
+                case 'kiss':
+                    title = '😘 키스 타임 😘';
+                    message = '뽑기로 운명의 상대를 찾아보세요!';
+                    closeMissionBtn.textContent = "뽑기 하러 가기";
+                    closeMissionBtn.onclick = () => {
+                        missionPopup.classList.add('hidden');
+                        startStrawGame('kiss', score, isDouble);
+                    };
+                    break;
+                case 'truthordare': 
+                    title = '😈 진실 혹은 도전 😈';
+                    message = '진실을 말할 것인가, 도전을 받아들일 것인가!';
+                    closeMissionBtn.textContent = "확인";
+                    closeMissionBtn.onclick = () => {
+                        missionPopup.classList.add('hidden');
+                        if (isDouble) players[currentPlayerIndex].hasDoubleBuff = false; 
+                        if (!applyScoreAndCheckWin(currentPlayerIndex, score)) nextTurn();
+                    };
+                    break;
+            }
+
+            missionTitle.textContent = title;
+            missionMessage.textContent = message;
+            missionPopup.classList.remove('hidden');
+        }
+
+        // --- Straw Game (King & Kiss) ---
+        function startStrawGame(type, score = 0, isDouble = false) {
+            strawGameType = type;
+            strawGameScore = score;
+            strawGameIsDouble = isDouble;
+            strawGameWinners = [];
+            drawnStrawIndices.clear();
+            strawGameResult.innerHTML = '';
+
+            if (type === 'king') {
+                kingOfTheTurn = currentPlayerIndex;
+                strawGameTitle.textContent = "👑 왕게임 제비뽑기 👑";
+                straws = ['win', 'win', 'lose', 'lose', 'lose'].sort(() => Math.random() - 0.5);
+                strawGameDrawers = players.map((_, i) => i);
+            } else { // 'kiss'
+                kingOfTheTurn = -1;
+                strawGameTitle.textContent = "😘 키스타임 제비뽑기 😘";
+                straws = ['win', 'lose', 'lose', 'lose'].sort(() => Math.random() - 0.5);
+                strawGameDrawers = players.map((_, i) => i).filter(i => i !== currentPlayerIndex);
+            }
+            strawGameCurrentDrawerIndex = 0;
+            
+            renderStraws(straws.length);
+            updateStrawGameStatus();
+            strawGameEndButtons.classList.remove('hidden');
+            strawGamePopup.classList.remove('hidden');
+        }
+
+        function renderStraws(count) {
+            strawCup.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const strawDiv = document.createElement('div');
+                strawDiv.className = 'straw';
+                strawDiv.dataset.index = i;
+                strawDiv.onclick = () => drawStraw(i);
+                strawCup.appendChild(strawDiv);
+            }
+        }
+
+        function updateStrawGameStatus() {
+            if (strawGameCurrentDrawerIndex < strawGameDrawers.length) {
+                const drawerIndex = strawGameDrawers[strawGameCurrentDrawerIndex];
+                strawGameStatusText.textContent = `${players[drawerIndex].name}, 제비를 뽑으세요!`;
+            } else {
+                strawGameStatusText.textContent = "모두 뽑았습니다!";
+            }
+        }
+        
+        function drawStraw(strawIndex) {
+            if (drawnStrawIndices.has(strawIndex) || strawGameCurrentDrawerIndex >= strawGameDrawers.length) return;
+            
+            const drawerIndex = strawGameDrawers[strawGameCurrentDrawerIndex];
+            drawnStrawIndices.add(strawIndex);
+            const strawDiv = strawCup.querySelector(`.straw[data-index='${strawIndex}']`);
+            const result = straws[strawIndex];
+            
+            strawDiv.classList.add('drawn');
+            if(result === 'win') {
+                strawDiv.classList.add('win');
+                strawGameWinners.push(drawerIndex);
+                strawGameResult.innerHTML += `<p>${players[drawerIndex].name}님... <span class="text-green-400">🎉 당첨! 🎉</span></p>`;
+            } else {
+                strawDiv.classList.add('lose');
+                strawGameResult.innerHTML += `<p>${players[drawerIndex].name}님... <span class="text-gray-400">꽝!</span></p>`;
+            }
+
+            strawGameCurrentDrawerIndex++;
+            updateStrawGameStatus();
+        }
+
+        function endStrawGame(success) {
+            strawGamePopup.classList.add('hidden');
+            if (strawGameIsDouble) players[currentPlayerIndex].hasDoubleBuff = false;
+
+            if (strawGameType === 'king') {
+                if (success) {
+                    const winners = new Set(strawGameWinners);
+                    winners.add(kingOfTheTurn);
+                    rollResultEl.innerHTML = `<p class="text-xl font-bold text-green-400">왕게임 성공!</p>`;
+                    winners.forEach(winnerIndex => applyScoreAndCheckWin(winnerIndex, 10));
+                } else {
+                    rollResultEl.innerHTML = `<p class="text-xl font-bold text-red-400">왕게임 벌주!</p>`;
+                    applyScoreAndCheckWin(kingOfTheTurn, 10);
+                }
+            } else { // 'kiss'
+                if (success) {
+                    rollResultEl.innerHTML = `<p class="text-xl font-bold text-green-400">키스타임 성공!</p>`;
+                    const winners = new Set(strawGameWinners);
+                    winners.add(currentPlayerIndex);
+                    winners.forEach(winnerIndex => applyScoreAndCheckWin(winnerIndex, strawGameScore));
+                } else {
+                    rollResultEl.innerHTML = `<p class="text-xl font-bold text-red-400">키스타임 벌주!</p>`;
+                    applyScoreAndCheckWin(currentPlayerIndex, strawGameScore);
+                }
+            }
+            if (winPopup.classList.contains('hidden')) {
+                setTimeout(() => nextTurn(), 1500);
+            }
+        }
+
+        strawSuccessBtn.onclick = () => endStrawGame(true);
+        strawPunishBtn.onclick = () => endStrawGame(false);
+        
+        // --- Regular Mission Flow ---
+        function startKingGame() {
+            kingOfTheTurn = currentPlayerIndex;
+            missionTitle.textContent = "👑 왕게임 👑";
+            missionMessage.textContent = "내가 왕이로소이다! 왕의 명령에 따르라!";
+            missionOptions.innerHTML = '';
+            blackKnightBtn.style.display = 'none';
+            missionActionButtons.style.display = 'flex';
+            closeMissionBtn.textContent = "명령 고르기";
+            closeMissionBtn.onclick = showKingGameLevelPopup;
+            missionPopup.classList.remove('hidden');
+        }
+        function showKingGameLevelPopup() {
+            missionPopup.classList.add('hidden');
+            kingGameLevelOptions.innerHTML = '';
+            kingGameLevels.forEach(level => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center p-4 rounded-lg hover:bg-gray-700 cursor-pointer popup-list-item';
+                item.onclick = () => showKingGameMissionPopup(level.level);
+                item.innerHTML = `<div class="flex-shrink-0 h-12 w-12 rounded-full ${level.color} flex items-center justify-center mr-4"><span class="text-white font-bold">LV.${level.level}</span></div><div class="flex-1 text-left"><p class="font-semibold text-gray-200">${level.title}</p><p class="text-sm text-gray-400">${level.desc}</p></div><i class="fas fa-chevron-right text-gray-500"></i>`;
+                kingGameLevelOptions.appendChild(item);
+            });
+            kingGameLevelPopup.classList.remove('hidden');
+        }
+        function showKingGameMissionPopup(level) {
+            kingGameLevelPopup.classList.add('hidden');
+            kingGameMissionTitle.textContent = `LV.${level} 미션 리스트`;
+            kingGameMissionList.innerHTML = '';
+            kingGameMissions[level].forEach(missionText => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-3 bg-gray-700 rounded hover:bg-gray-600';
+                btn.textContent = missionText;
+                btn.onclick = () => { 
+                    kingGameMissionPopup.classList.add('hidden');
+                    startStrawGame('king');
+                };
+                kingGameMissionList.appendChild(btn);
+            });
+            kingGameMissionPopup.classList.remove('hidden');
+        }
+        function triggerRandomMission(scoreFromRoll, isDoubleBuff) {
+            const mission = missions[Math.floor(Math.random() * missions.length)];
+            missionTitle.textContent = mission.title;
+            let originalMissionText = mission.text;
+            missionMessage.textContent = (isDoubleBuff && mission.category === 'drink') ? originalMissionText + " (벌칙도 더블! 😈)" : originalMissionText;
+            missionOptions.innerHTML = '';
+            missionActionButtons.style.display = 'flex';
+            if (mission.category === 'drink') {
+                blackKnightBtn.style.display = 'block';
+                closeMissionBtn.textContent = "벌칙 받기 😈";
+                blackKnightBtn.onclick = () => callBlackKnight(scoreFromRoll, isDoubleBuff);
+                closeMissionBtn.onclick = () => { missionPopup.classList.add('hidden'); if (isDoubleBuff) players[currentPlayerIndex].hasDoubleBuff = false; if (!applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll)) nextTurn(); };
+            } else {
+                blackKnightBtn.style.display = 'none';
+                closeMissionBtn.textContent = "확인";
+                closeMissionBtn.onclick = () => { missionPopup.classList.add('hidden'); if (isDoubleBuff) players[currentPlayerIndex].hasDoubleBuff = false; if (mission.type !== 'target') { if (!applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll)) nextTurn(); } };
+            }
+            switch (mission.type) {
+                case 'target':
+                    missionActionButtons.style.display = 'none';
+                    let targets = players.filter((p, i) => i !== currentPlayerIndex);
+                    targets.forEach(target => {
+                        const btn = document.createElement('button');
+                        btn.className = 'w-full text-left p-2 bg-gray-700 rounded hover:bg-gray-600';
+                        btn.textContent = `${target.avatar} ${target.name} (${target.score}점)`;
+                        btn.onclick = () => {
+                            missionPopup.classList.add('hidden');
+                            if (isDoubleBuff) players[currentPlayerIndex].hasDoubleBuff = false;
+                            let gameOver = applyScoreAndCheckWin(currentPlayerIndex, scoreFromRoll);
+                            if (gameOver) return;
+                            if (mission.id === 'steal') { let stolenScore = Math.min(target.score, 15); players[currentPlayerIndex].score += stolenScore; target.score -= stolenScore; }
+                            else if (mission.id === 'drink_select') { rollResultEl.innerHTML = `<p class="text-xl font-bold text-pink-400">${players[currentPlayerIndex].name}님과 ${target.name}님이 함께 원샷!</p>`; }
+                            if (!applyScoreAndCheckWin(currentPlayerIndex, 0)) nextTurn();
+                        };
+                        missionOptions.appendChild(btn);
+                    });
+                    break;
+                case 'buff':
+                    if (mission.id === 'double') players[currentPlayerIndex].hasDoubleBuff = true; updateUI(); break;
+                case 'debuff':
+                    if (mission.id === 'reset_one') { let maxScore = 0, targetIndex = -1; players.forEach((p, i) => { if (p.score > maxScore) { maxScore = p.score; targetIndex = i; } }); if (targetIndex !== -1) { players[targetIndex].score = 0; missionMessage.textContent = `최고점 플레이어 ${players[targetIndex].name}님의 점수가 0이 되었습니다!`; } else { missionMessage.textContent = `모두 0점이라 초기화할 점수가 없습니다!`; } } updateUI(); break;
+            }
+            missionPopup.classList.remove('hidden');
+        }
+        function callBlackKnight(scoreFromRoll, isDoubleBuff) {
+            missionTitle.textContent = "흑기사 모집! ⚔️";
+            missionMessage.innerHTML = `누가 벌칙을 대신 받고 <span class="text-cyan-400 font-bold">${scoreFromRoll}점</span>을 획득하시겠습니까?`;
+            missionActionButtons.style.display = 'none';
+            missionOptions.innerHTML = '';
+            let potentialKnights = players.filter((p, i) => i !== currentPlayerIndex);
+            potentialKnights.forEach(knight => {
+                const knightIndex = players.findIndex(p => p.name === knight.name);
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-2 bg-gray-700 rounded hover:bg-gray-600';
+                btn.textContent = `${knight.avatar} ${knight.name}`;
+                btn.onclick = () => {
+                    missionPopup.classList.add('hidden');
+                    if (isDoubleBuff) players[currentPlayerIndex].hasDoubleBuff = false;
+                    rollResultEl.innerHTML = `<p class="text-xl font-bold text-green-400">흑기사 ${knight.name}님이 ${scoreFromRoll}점 획득!</p>`;
+                    if (!applyScoreAndCheckWin(knightIndex, scoreFromRoll)) setTimeout(() => nextTurn(), 1500);
+                };
+                missionOptions.appendChild(btn);
+            });
+        }
+        function showWinPopup(winnerIndex) {
+            gameActive = false;
+            rollBtn.disabled = true;
+            rollBtn.className += " opacity-50 cursor-not-allowed";
+            winMessage.innerHTML = `<span class="font-bold text-amber-300 text-lg">${players[winnerIndex].name}</span>님이 마침내 100점을 돌파! <br><span class="text-xl mt-2 block">원하는 사람에게 명령권 사용 가능!</span>`;
+            winPopup.classList.remove('hidden');
+        }
+        
+        // Event Listeners
+        rollBtn.addEventListener('click', rollDice);
+        resetBtn.addEventListener('click', initializeGame);
+        newGameFromWinBtn.addEventListener('click', initializeGame);
+        
+        initializeGame();
+
+    </script>
+</body>
+</html>
