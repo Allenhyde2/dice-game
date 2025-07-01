@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>페널티킥 게임</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #4CAF50; /* 잔디 색 */
+            font-family: 'Arial', sans-serif;
+            flex-direction: column;
+        }
+        #gameCanvas {
+            background-color: #66BB6A;
+            border: 5px solid white;
+            cursor: crosshair; /* 조준점 커서 */
+        }
+        #info {
+            margin-top: 20px;
+            font-size: 24px;
+            color: white;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="info">마우스를 움직여 방향을 조준하고 클릭해서 공을 차세요!</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const info = document.getElementById('info');
+
+        // 게임 상태
+        let gameState = 'ready'; // ready, shooting, end
+
+        // 골대 설정
+        const goal = {
+            x: canvas.width / 2 - 150,
+            y: 50,
+            width: 300,
+            height: 150
+        };
+
+        // 공 설정
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height - 50,
+            radius: 15,
+            speed: 15,
+            dx: 0, // x 방향 속도
+            dy: 0  // y 방향 속도
+        };
+
+        // 마우스 위치
+        const mouse = {
+            x: canvas.width / 2,
+            y: canvas.height / 2
+        };
+
+        // 이벤트 리스너
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('click', () => {
+            if (gameState === 'ready') {
+                shoot();
+            }
+        });
+
+        function drawGoal() {
+            ctx.beginPath();
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(goal.x, goal.y, goal.width, goal.height);
+            ctx.closePath();
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        function drawAimLine() {
+            if (gameState === 'ready') {
+                ctx.beginPath();
+                ctx.setLineDash([5, 5]); // 점선
+                ctx.moveTo(ball.x, ball.y);
+                ctx.lineTo(mouse.x, mouse.y);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.setLineDash([]); // 점선 해제
+                ctx.closePath();
+            }
+        }
+
+        function shoot() {
+            gameState = 'shooting';
+            info.textContent = '슈팅!';
+
+            const angle = Math.atan2(mouse.y - ball.y, mouse.x - ball.x);
+            ball.dx = Math.cos(angle) * ball.speed;
+            ball.dy = Math.sin(angle) * ball.speed;
+        }
+
+        function update() {
+            if (gameState === 'shooting') {
+                ball.x += ball.dx;
+                ball.y += ball.dy;
+
+                // 골 판정
+                if (ball.y < goal.y + goal.height && ball.y > goal.y) {
+                    if (ball.x > goal.x && ball.x < goal.x + goal.width) {
+                        gameState = 'end';
+                        info.textContent = '골! (다시 하려면 1초 후 클릭)';
+                        setTimeout(reset, 1000);
+                        return;
+                    }
+                }
+
+                // 화면 밖으로 나갔을 때 (골이 아닐 때)
+                if (ball.x < 0 || ball.x > canvas.width || ball.y < 0) {
+                    gameState = 'end';
+                    info.textContent = '아웃! (다시 하려면 1초 후 클릭)';
+                    setTimeout(reset, 1000);
+                }
+            }
+        }
+        
+        function reset() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height - 50;
+            ball.dx = 0;
+            ball.dy = 0;
+            
+            // 클릭으로 재시작할 수 있도록 상태 변경
+            gameState = 'end_wait_for_click';
+            canvas.addEventListener('click', restartGame, { once: true });
+        }
+
+        function restartGame() {
+            gameState = 'ready';
+            info.textContent = '마우스를 움직여 방향을 조준하고 클릭해서 공을 차세요!';
+        }
+
+        function gameLoop() {
+            // 화면 지우기
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawGoal();
+            drawAimLine();
+            drawBall();
+            update();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 게임 시작
+        gameLoop();
+    </script>
+
+</body>
+</html>
