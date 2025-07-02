@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>3D 다트 챌린지 FINAL</title>
+    <title>3D 다트 챌린지 FINAL v4</title>
     <style>
         body {
             display: flex;
@@ -68,11 +68,7 @@
 
         const balloonImage = new Image();
         let imagesLoaded = false;
-        
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분: 풍선 이미지를 요청하신 파란색 풍선으로 교체
-        // ==========================================================
-        balloonImage.src = 'https://i.postimg.cc/9QG7cpb3/blue-balloon.png'; // 배경이 제거된 파란색 풍선 이미지
+        balloonImage.src = 'https://i.ibb.co/L8d0gDL/blue-balloon.png';
 
         balloonImage.onload = () => {
             imagesLoaded = true;
@@ -87,15 +83,23 @@
         const Z_WALL = 100;
         const PERSPECTIVE = canvas.height * 0.8;
         const GRAVITY = 0.2;
+        const FLIGHT_TIME = 60;
 
         const dart = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 50 };
-        const powerGauge = { value: 0, direction: 1, speed: 4 };
+        const powerGauge = {
+            value: 0,
+            direction: 1,
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분: 파워 게이지 속도를 4에서 0.8로 변경
+            // ==========================================================
+            speed: 0.8
+        };
         
         const wall = {
             x: 0,
             speed: 2,
             direction: 1,
-            movementRange: 100
+            movementRange: 370
         };
 
         function project(x, y, z) {
@@ -124,7 +128,7 @@
                         width: balloonWidth, height: balloonHeight,
                         isPopped: false,
                         points: pointValues[Math.floor(Math.random() * pointValues.length)],
-                        color: '#3498db' // 파티클 효과를 위한 파란색 지정
+                        color: '#3498db'
                     });
                 }
             }
@@ -136,11 +140,8 @@
             for (let i = 0; i < canvas.width / stripeWidth; i++) {
                 ctx.fillStyle = colors[i % 2];
                 ctx.beginPath();
-                ctx.moveTo(i * stripeWidth, 0);
-                ctx.lineTo((i + 1) * stripeWidth, 0);
-                ctx.lineTo((i + 0.5) * stripeWidth, topCurtainHeight);
-                ctx.closePath();
-                ctx.fill();
+                ctx.moveTo(i * stripeWidth, 0); ctx.lineTo((i + 1) * stripeWidth, 0); ctx.lineTo((i + 0.5) * stripeWidth, topCurtainHeight);
+                ctx.closePath(); ctx.fill();
             }
             for (let i = 0; i < canvas.height / stripeWidth; i++) {
                 ctx.fillStyle = colors[i % 2];
@@ -162,8 +163,7 @@
             ctx.lineWidth = 2 * wallProj.scale;
             for (let i = 0; i < 15; i++) {
                 ctx.beginPath();
-                ctx.moveTo(wallX + (i * wallWidth / 15), wallY);
-                ctx.lineTo(wallX + (i * wallWidth / 15), wallY + wallHeight);
+                ctx.moveTo(wallX + (i * wallWidth / 15), wallY); ctx.lineTo(wallX + (i * wallWidth / 15), wallY + wallHeight);
                 ctx.stroke();
             }
         }
@@ -194,11 +194,19 @@
             ctx.moveTo(x, tipY - size * 0.2); ctx.lineTo(x - size * 0.1, tipY); ctx.lineTo(x + size * 0.1, tipY);
             ctx.closePath(); ctx.fill();
         }
+
+        function calculateLaunchVy(power) {
+            const topY = balloons[0].baseY + balloons[0].height / 2;
+            const bottomY = balloons[balloons.length - 1].baseY + balloons[balloons.length - 1].height / 2;
+            const targetY = bottomY - (power / 100) * (bottomY - topY);
+            const vy_initial = (targetY - dart.y - 0.5 * GRAVITY * FLIGHT_TIME * FLIGHT_TIME) / FLIGHT_TIME;
+            return vy_initial;
+        }
         
         function drawTrajectory() {
             if (gameState !== 'powering') return;
-            const launchVy = -15 - (powerGauge.value / 100) * 15;
-            const timeToWall = 60;
+            const launchVy = calculateLaunchVy(powerGauge.value);
+            const timeToWall = FLIGHT_TIME;
             let targetX = canvas.width / 2;
             let tempX = dart.x, tempY = dart.y, tempZ = dart.z;
             let tempVx = (targetX - tempX) / timeToWall;
@@ -221,9 +229,8 @@
         
         function update() {
             wall.x += wall.speed * wall.direction;
-            if (Math.abs(wall.x) > wall.movementRange) {
-                wall.direction *= -1;
-            }
+            if (Math.abs(wall.x) > wall.movementRange) { wall.direction *= -1; }
+
             if (gameState === 'powering') {
                 powerGauge.value += powerGauge.direction * powerGauge.speed;
                 if (powerGauge.value > 100 || powerGauge.value < 0) {
@@ -293,8 +300,8 @@
             if (e.code === 'Space' && gameState === 'powering') {
                 e.preventDefault();
                 gameState = 'throwing';
-                const launchVy = -15 - (powerGauge.value / 100) * 15;
-                const timeToWall = 60;
+                const launchVy = calculateLaunchVy(powerGauge.value);
+                const timeToWall = FLIGHT_TIME;
                 let targetX = canvas.width / 2;
                 dart.vx = (targetX - dart.x) / timeToWall;
                 dart.vy = launchVy;
