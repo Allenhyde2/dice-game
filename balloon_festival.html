@@ -61,17 +61,28 @@
         const ctx = canvas.getContext('2d');
         const messageBox = document.getElementById('message-box');
 
-        let gameState = 'loading'; // ready, powering, throwing, result, gameOver
+        let gameState = 'loading';
         let score = 0;
         const balloons = [];
         const particles = [];
 
         const balloonImage = new Image();
-        let imagesLoaded = false;
+        // 풍선 이미지 URL, 저작권 프리 이미지 사용
         balloonImage.src = 'https://creazilla-store.fra1.digitaloceanspaces.com/cliparts/78219/red-balloon-clipart-md.png';
+        
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 ✨✨
+        // 이미지가 모두 로딩된 후, 게임 설정(startGame)과
+        // 애니메이션(gameLoop)을 시작합니다.
+        // ==========================================================
         balloonImage.onload = () => {
-            imagesLoaded = true;
             startGame();
+            gameLoop();
+        };
+        balloonImage.onerror = () => {
+            // 이미지 로딩 실패 시 에러 메시지 표시
+            messageBox.innerText = "이미지 로딩 실패!";
+            messageBox.style.display = 'block';
         };
 
         const Z_WALL = 100;
@@ -81,12 +92,11 @@
         const dart = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 50 };
         const powerGauge = { value: 0, direction: 1, speed: 4 };
         
-        // ✨ 새로 추가된 부분: 벽과 풍선의 움직임 제어
         const wall = {
-            x: 0, // 벽의 좌우 위치 오프셋
+            x: 0,
             speed: 2,
             direction: 1,
-            movementRange: 100 // 좌우 이동 범위
+            movementRange: 100
         };
 
         function project(x, y, z) {
@@ -109,8 +119,8 @@
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     balloons.push({
-                        baseX: startX + c * (balloonWidth + paddingX), // 기준 x 위치
-                        baseY: startY + r * (balloonHeight + paddingY), // 기준 y 위치
+                        baseX: startX + c * (balloonWidth + paddingX),
+                        baseY: startY + r * (balloonHeight + paddingY),
                         z: Z_WALL,
                         width: balloonWidth, height: balloonHeight,
                         isPopped: false,
@@ -119,19 +129,35 @@
                 }
             }
         }
+
+        function drawTent() {
+            const stripeWidth = 40, topCurtainHeight = 60, sideCurtainWidth = 120;
+            const colors = ['#d63031', '#f1f2f6'];
+            for (let i = 0; i < canvas.width / stripeWidth; i++) {
+                ctx.fillStyle = colors[i % 2];
+                ctx.beginPath();
+                ctx.moveTo(i * stripeWidth, 0);
+                ctx.lineTo((i + 1) * stripeWidth, 0);
+                ctx.lineTo((i + 0.5) * stripeWidth, topCurtainHeight);
+                ctx.closePath();
+                ctx.fill();
+            }
+            for (let i = 0; i < canvas.height / stripeWidth; i++) {
+                ctx.fillStyle = colors[i % 2];
+                ctx.fillRect(0, i * stripeWidth, sideCurtainWidth, stripeWidth);
+                ctx.fillRect(canvas.width - sideCurtainWidth, i * stripeWidth, sideCurtainWidth, stripeWidth);
+            }
+        }
         
         function drawWall() {
-            // 벽의 현재 x 위치 계산
             const wallCurrentX = wall.x;
             const wallProj = project(wallCurrentX, 0, Z_WALL);
             const wallWidth = canvas.width * wallProj.scale * 1.2;
             const wallHeight = canvas.height * wallProj.scale * 1.1;
             const wallX = (canvas.width - wallWidth) / 2 + (wallCurrentX * wallProj.scale);
             const wallY = 60;
-
             ctx.fillStyle = '#8B4513';
             ctx.fillRect(wallX, wallY, wallWidth, wallHeight);
-
             ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
             ctx.lineWidth = 2 * wallProj.scale;
             for (let i = 0; i < 15; i++) {
@@ -143,9 +169,8 @@
         }
 
         function drawBalloons() {
-            if (!imagesLoaded) return;
             balloons.forEach(b => {
-                const proj = project(b.baseX + wall.x, b.baseY, b.z); // 벽의 움직임(wall.x) 반영
+                const proj = project(b.baseX + wall.x, b.baseY, b.z);
                 if (!b.isPopped) {
                     const w = b.width * proj.scale, h = b.height * proj.scale;
                     ctx.drawImage(balloonImage, proj.x, proj.y, w, h);
@@ -171,15 +196,12 @@
         
         function drawTrajectory() {
             if (gameState !== 'powering') return;
-            
             const launchVy = -15 - (powerGauge.value / 100) * 15;
-            const timeToWall = 60; // ✨ 다트 비행 시간(프레임)을 60으로 늘려 속도 늦춤
-            let targetX = canvas.width / 2; // 타겟 x는 항상 중앙
-
+            const timeToWall = 60;
+            let targetX = canvas.width / 2;
             let tempX = dart.x, tempY = dart.y, tempZ = dart.z;
             let tempVx = (targetX - tempX) / timeToWall;
             let tempVy = launchVy, tempVz = (Z_WALL - tempZ) / timeToWall;
-
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.lineWidth = 2;
@@ -197,12 +219,10 @@
         }
         
         function update() {
-            // ✨ 벽과 풍선 움직임 업데이트 (게임 상태와 무관하게 계속 움직임)
             wall.x += wall.speed * wall.direction;
             if (Math.abs(wall.x) > wall.movementRange) {
                 wall.direction *= -1;
             }
-
             if (gameState === 'powering') {
                 powerGauge.value += powerGauge.direction * powerGauge.speed;
                 if (powerGauge.value > 100 || powerGauge.value < 0) {
@@ -223,7 +243,6 @@
             gameState = 'result';
             let hit = false;
             for(const b of balloons) {
-                // 충돌 검사 시, 풍선의 현재 위치(baseX + wall.x)로 계산
                 const currentBalloonX = b.baseX + wall.x;
                 if (!b.isPopped && dart.x > currentBalloonX && dart.x < currentBalloonX + b.width && dart.y > b.baseY && dart.y < b.baseY + b.height) {
                     b.isPopped = true;
@@ -259,7 +278,9 @@
             messageBox.style.display = 'block';
         }
 
+        const keys = {};
         window.addEventListener('keydown', e => {
+            keys[e.code] = true;
             if (e.code === 'Space' && gameState === 'ready') {
                 e.preventDefault();
                 gameState = 'powering';
@@ -269,12 +290,13 @@
             }
         });
         window.addEventListener('keyup', e => {
+            keys[e.code] = false;
             if (e.code === 'Space' && gameState === 'powering') {
                 e.preventDefault();
                 gameState = 'throwing';
                 const launchVy = -15 - (powerGauge.value / 100) * 15;
-                const timeToWall = 60; // ✨ 느린 속도를 위해 비행 시간 고정
-                let targetX = canvas.width / 2; // ✨ 타겟 x는 항상 중앙
+                const timeToWall = 60;
+                let targetX = canvas.width / 2;
                 dart.vx = (targetX - dart.x) / timeToWall;
                 dart.vy = launchVy;
                 dart.vz = (Z_WALL - dart.z) / timeToWall;
@@ -306,8 +328,6 @@
             drawPowerGauge();
             requestAnimationFrame(gameLoop);
         }
-
-        gameLoop();
     </script>
 </body>
 </html>
