@@ -285,14 +285,17 @@
 
             if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
                 goalkeepers.forEach(keeper => {
-                    // 골키퍼의 중심점이 이동할 경계를 정의합니다.
-                    // 골대 영역에서 좌우로 keeper.width, 상하로 keeper.height만큼 확장합니다.
-                    const minX = goal.x - keeper.width;
-                    const maxX = goal.x + goal.width + keeper.width;
-                    const minY = goal.y - keeper.height;
-                    const maxY = goal.y + goal.height + keeper.height;
+                    // 1. 골키퍼의 중심점이 이동할 경계를 정의
+                    // 골대 영역에서 좌우, 상하로 골키퍼 크기의 '절반'만큼 확장
+                    const paddingX = keeper.width / 2;
+                    const paddingY = keeper.height / 2;
+                    
+                    const minX = goal.x - paddingX;
+                    const maxX = goal.x + goal.width + paddingX;
+                    const minY = goal.y - paddingY;
+                    const maxY = goal.y + goal.height + paddingY;
 
-                    // 골키퍼의 몸 전체가 아닌, 중심점(x, y)이 이 범위 내에 있도록 제한합니다.
+                    // 2. 골키퍼의 몸 전체가 아닌, 중심점(x, y)이 이 범위 내에 있도록 제한
                     const keeperMinX = minX + keeper.width / 2;
                     const keeperMaxX = maxX - keeper.width / 2;
                     const keeperMinY = minY + keeper.height / 2;
@@ -300,7 +303,8 @@
 
                     keeper.x += keeper.speedX * keeper.directionX;
                     keeper.y += keeper.speedY * keeper.directionY;
-
+                    
+                    // 3. 계산된 경계에 닿으면 방향 전환
                     if (keeper.x < keeperMinX || keeper.x > keeperMaxX) {
                         keeper.directionX *= -1;
                         keeper.x = Math.max(keeperMinX, Math.min(keeper.x, keeperMaxX));
