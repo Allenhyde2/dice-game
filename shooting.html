@@ -203,8 +203,50 @@
             ctx.stroke();
         }
 
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 1: 빠져있던 골키퍼 그리기 함수 추가
+        // ==========================================================
+        function drawGoalkeeper() {
+            if (gameState === 'result') return;
+            const proj = project(goalkeeper.x, goalkeeper.y, Z_GOAL);
+            const w = goalkeeper.width * proj.scale;
+            const h = goalkeeper.height * proj.scale;
+
+            ctx.fillStyle = '#e67e22';
+            ctx.strokeStyle = '#d35400';
+            ctx.lineWidth = 2 * proj.scale;
+
+            // 손바닥
+            ctx.beginPath();
+            ctx.ellipse(proj.x, proj.y, w * 0.4, h * 0.45, 0, Math.PI, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // 손가락
+            const drawFinger = (x, y, width, height, angle) => {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                // A rounded rectangle for a finger shape
+                ctx.roundRect(-width/2, -height, width, height, width/2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            };
+            
+            const fingerW = w * 0.18;
+            const fingerH = h * 0.5;
+            drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
+            drawFinger(proj.x - w * 0.1, proj.y - h * 0.4, fingerW, fingerH, -0.05);
+            drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
+            drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
+            
+            // 엄지
+            drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
+        }
+
         function drawTarget() {
-             // ✨ 파워 조절 중에도 조준점이 보이도록 조건 변경
              if (gameState !== 'aiming' && gameState !== 'powering') return;
              const proj = project(target.x, target.y, Z_GOAL);
              ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
@@ -218,11 +260,7 @@
              ctx.stroke();
         }
         
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분 1: update() 함수 수정
-        // ==========================================================
         function update() {
-            // ✨ 파워 조절 중에도 방향키가 먹히도록 gameState 조건 변경
             if (gameState === 'aiming' || gameState === 'powering') {
                 if (keys['ArrowLeft']) target.x -= 5;
                 if (keys['ArrowRight']) target.x += 5;
@@ -311,11 +349,13 @@
 
         window.addEventListener('keydown', e => {
             keys[e.code] = true;
-            if (e.code === 'Space' && gameState === 'aiming') {
+            if (e.code === 'Space' && (gameState === 'aiming' || gameState === 'powering')) {
                 e.preventDefault();
-                gameState = 'powering';
-                powerGauge.value = 0;
-                powerGauge.direction = 1;
+                if (gameState === 'aiming') {
+                    gameState = 'powering';
+                    powerGauge.value = 0;
+                    powerGauge.direction = 1;
+                }
             } else if (e.code === 'Enter' && (gameState === 'result' || gameState === 'gameOver')) {
                 startGame();
             }
@@ -353,8 +393,8 @@
             update();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawField();
-            drawGoalPost();
             drawGoalkeeper();
+            drawGoalPost();
             drawBall();
             drawTarget();
             drawPowerGauge();
