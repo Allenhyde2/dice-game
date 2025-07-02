@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>3D 사커 챌린지 - 스테이지 모드</title>
+    <title>3D 사커 챌린지</title>
     <style>
         body {
             display: flex;
@@ -312,12 +312,20 @@
             let isSaved = false;
 
             goalkeepers.forEach(keeper => {
-                const closestX = Math.max(keeper.x, Math.min(ball.x, keeper.x + keeper.width));
-                const closestY = Math.max(keeper.y, Math.min(ball.y, keeper.y + keeper.height));
+                const gloveHitbox = {
+                    x: keeper.x, y: keeper.y,
+                    width: keeper.width, height: keeper.height
+                };
+
+                const closestX = Math.max(gloveHitbox.x, Math.min(ball.x, gloveHitbox.x + gloveHitbox.width));
+                const closestY = Math.max(gloveHitbox.y, Math.min(ball.y, gloveHitbox.y + gloveHitbox.height));
+
                 const distanceX = ball.x - closestX;
                 const distanceY = ball.y - closestY;
                 const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-                if (distanceSquared < (ball.radius * ball.radius)) {
+                
+                const requiredPenetration = ball.radius * 0.2;
+                if (distanceSquared < (ball.radius - requiredPenetration) * (ball.radius - requiredPenetration)) {
                     isSaved = true;
                 }
             });
@@ -329,7 +337,6 @@
                 messageBox.innerHTML = `GAME OVER<div id="retry-message">FINAL SCORE: ${score}<br>RETRY? (Enter)</div>`;
             } else if (ball.x > goal.x && ball.x < goal.x + goal.width &&
                        ball.y > goal.y && ball.y < goal.y + goal.height) {
-                // ✨ 버그 수정: gameState를 'nextStage'로 변경
                 gameState = 'nextStage';
                 message = 'GOAL!';
                 messageBox.style.color = 'gold';
@@ -387,7 +394,6 @@
                     powerGauge.direction = 1;
                 }
             } 
-            // ✨ 버그 수정: 'nextStage' 상태일 때는 Enter키가 작동하지 않도록 함
             else if (e.code === 'Enter' && (gameState === 'result' || gameState === 'gameOver')) {
                 if (gameState === 'gameOver') {
                     startGame();
