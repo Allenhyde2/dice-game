@@ -306,18 +306,32 @@
         function checkGoal() {
             gameState = 'result';
             let message = '';
-
-            const ballLeft = ball.x - ball.radius;
-            const ballRight = ball.x + ball.radius;
-            const ballTop = ball.y - ball.radius;
-            const ballBottom = ball.y + ball.radius;
-
-            const gloveLeft = goalkeeper.x;
-            const gloveRight = goalkeeper.x + goalkeeper.width;
-            const gloveTop = goalkeeper.y;
-            const gloveBottom = goalkeeper.y + goalkeeper.height;
-
-            if (ballRight > gloveLeft && ballLeft < gloveRight && ballBottom > gloveTop && ballTop < gloveBottom) {
+        
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분: 충돌 판정 로직 개선
+            // ==========================================================
+        
+            // 1. 골키퍼 장갑의 실제 판정 영역(Hitbox)을 시각적인 모양에 맞게 약간 조정
+            const gloveHitbox = {
+                x: goalkeeper.x + 10,
+                y: goalkeeper.y + 10,
+                width: goalkeeper.width - 20,
+                height: goalkeeper.height - 20
+            };
+        
+            // 2. 공(원)과 장갑(사각형)의 가장 가까운 지점을 찾음
+            const closestX = Math.max(gloveHitbox.x, Math.min(ball.x, gloveHitbox.x + gloveHitbox.width));
+            const closestY = Math.max(gloveHitbox.y, Math.min(ball.y, gloveHitbox.y + gloveHitbox.height));
+        
+            // 3. 공의 중심과 가장 가까운 지점 사이의 거리를 계산
+            const distanceX = ball.x - closestX;
+            const distanceY = ball.y - closestY;
+            const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+        
+            // 4. 거리가 공의 반지름보다 작으면 충돌로 판정
+            const isSaved = distanceSquared < (ball.radius * ball.radius);
+        
+            if (isSaved) {
                 message = 'NO GOAL!';
                 messageBox.style.color = '#ff4757';
             } else if (ball.x > goal.x && ball.x < goal.x + goal.width &&
@@ -328,7 +342,7 @@
                 message = 'MISS';
                 messageBox.style.color = 'white';
             }
-
+        
             messageBox.innerHTML = `${message}<div id="retry-message">RETRY? (Enter)</div>`;
             messageBox.style.display = 'block';
         }
