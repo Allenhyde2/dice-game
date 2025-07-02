@@ -20,7 +20,8 @@
             position: relative;
             width: 600px;
             height: 800px;
-            background: url('https://img.freepik.com/free-vector/empty-football-stadium-background_1308-54602.jpg?w=1380&t=st=1678886450~exp=1678887050~hmac=b1c3e3e0a8b9f8d1e2c8f6b2e1f5e7c7e9a8d6e3c5f5e4b1e3f8d2a0b1c2d3e4') no-repeat center center;
+            /* 안정적인 배경 이미지 주소로 교체 */
+            background: url('https://images.pexels.com/photos/114296/pexels-photo-114296.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1') no-repeat center center;
             background-size: cover;
             border: 5px solid #fff;
             overflow: hidden;
@@ -77,34 +78,50 @@
         const messageBox = document.getElementById('message-box');
 
         let score = 0;
-        let gameState = 'ready'; // ready, playing, gameOver
+        let gameState = 'loading'; // loading, ready, playing, gameOver
 
         const ball = {
             x: canvas.width / 2,
             y: 150,
             radius: 40,
-            vy: 0, // 수직 속도
+            vy: 0,
             gravity: 0.4,
             img: new Image()
         };
-        ball.img.src = 'https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg'; // 축구공 이미지
+        // 안정적인 축구공 이미지 주소
+        ball.img.src = 'https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg';
 
         const timingCircle = {
             x: canvas.width / 2,
             y: canvas.height - 200,
-            perfectRadius: 50, // 퍼펙트 존
-            shrinkingRadius: 150, // 줄어드는 원
+            perfectRadius: 50,
+            shrinkingRadius: 150,
             shrinkSpeed: 2,
             isTiming: false
         };
 
+        // ==========================================================
+        // 여기가 핵심적인 수정 부분입니다!
+        // ball.img.onload는 이미지가 성공적으로 로딩된 후 실행됩니다.
+        // ==========================================================
+        ball.img.onload = function() {
+            gameState = 'ready';
+            messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
+            messageBox.style.display = 'block';
+            gameLoop(); // 모든 준비가 끝나고 게임 루프를 시작합니다.
+        };
+        ball.img.onerror = function() {
+            // 이미지를 불러오지 못했을 경우의 에러 처리
+            messageBox.innerHTML = '게임 리소스를 불러오는 데 실패했습니다.<br>페이지를 새로고침 해주세요.';
+            messageBox.style.display = 'block';
+        }
+
+
         function drawBall() {
-            // 공이 떨어지는 애니메이션
             if (gameState === 'playing' && !timingCircle.isTiming) {
                 ball.vy += ball.gravity;
                 ball.y += ball.vy;
 
-                // 바닥 근처에 도달하면 타이밍 시작
                 if (ball.y > canvas.height - 300) {
                     ball.y = canvas.height - 300;
                     ball.vy = 0;
@@ -112,12 +129,14 @@
                     timingCircle.shrinkingRadius = 150;
                 }
             }
-            ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
+            // 공이 타이밍 존에 있을 때도 계속 그려주도록 수정
+            if (gameState === 'playing' || gameState === 'gameOver') {
+                 ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
+            }
         }
 
         function drawTimingCircle() {
             if (gameState === 'playing' && timingCircle.isTiming) {
-                // 1. 퍼펙트 존 (고정된 원)
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'gold';
@@ -125,7 +144,6 @@
                 ctx.stroke();
                 ctx.closePath();
 
-                // 2. 줄어드는 원
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
@@ -133,11 +151,9 @@
                 ctx.stroke();
                 ctx.closePath();
 
-                // 원 줄어들게 하기
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
 
-                // 실패 판정 (원이 너무 작아졌을 때)
-                if (timingCircle.shrinkingRadius < timingCircle.perfectRadius - 10) {
+                if (timingCircle.shrinkingRadius < timingCircle.perfectRadius - 15) { // 실패 판정 범위 약간 넓힘
                     gameOver();
                 }
             }
@@ -148,18 +164,13 @@
 
             const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
 
-            // 성공 판정 (오차 범위 15px)
             if (diff <= 15) {
                 score++;
                 scoreEl.textContent = `SCORE: ${score}`;
-                
-                // 성공 후 공 튀어오르는 효과
                 ball.y = canvas.height - 301;
-                ball.vy = -15; // 튀어오르는 힘
-                
-                // 타이밍 초기화
+                ball.vy = -15;
                 timingCircle.isTiming = false;
-                timingCircle.shrinkSpeed += 0.1; // 점점 더 어려워짐
+                timingCircle.shrinkSpeed += 0.1;
             } else {
                 gameOver();
             }
@@ -183,9 +194,9 @@
         }
 
         function gameLoop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // 매 프레임 캔버스 지우기
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (gameState === 'playing') {
+            if (gameState === 'playing' || gameState === 'gameOver') {
                 drawBall();
                 drawTimingCircle();
             }
@@ -193,10 +204,9 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // 스페이스바 이벤트 리스너
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
-                e.preventDefault(); // 스크롤 방지
+                e.preventDefault();
                 if (gameState === 'playing') {
                     trap();
                 } else if (gameState === 'gameOver') {
@@ -207,11 +217,6 @@
                 }
             }
         });
-        
-        // 초기 시작 메시지
-        messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
-        messageBox.style.display = 'block';
-        gameLoop();
 
     </script>
 
