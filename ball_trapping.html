@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (컬러 모드)</title>
+    <title>축구 트래핑 타이밍 게임 (v2.0)</title>
     <style>
         body {
             display: flex;
@@ -79,7 +79,10 @@
 
         let score = 0;
         let gameState = 'loading';
-        let judgment = { text: '', alpha: 0 };
+        
+        let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
+        // ✨ 새로 추가된 부분: 획득 점수 텍스트 객체
+        let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
 
         const ball = {
             x: canvas.width / 2,
@@ -99,8 +102,6 @@
             shrinkingRadius: 150,
             shrinkSpeed: 2,
             isTiming: false,
-            pulseAlpha: 0,
-            pulseSpeed: 0.05
         };
 
         function getRandomRadius(min, max) {
@@ -125,7 +126,6 @@
                     if (ball.y >= canvas.height - 400 && ball.vy > 0) {
                         timingCircle.isTiming = true;
                         timingCircle.shrinkingRadius = 150;
-                        
                         const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
                         const distanceToTravel = timingCircle.y - ball.y;
                         ball.slowVy = distanceToTravel / framesToPerfect;
@@ -139,90 +139,113 @@
         
         function drawTimingCircle() {
             if (gameState === 'playing' && timingCircle.isTiming) {
-                // 1. 타겟 존
-                timingCircle.pulseAlpha += timingCircle.pulseSpeed;
-                if (timingCircle.pulseAlpha > 1 || timingCircle.pulseAlpha < 0) {
-                    timingCircle.pulseSpeed *= -1;
-                }
+                const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
+                const maxDiffForColor = 50;
+                let ratio = Math.min(1, diff / maxDiffForColor);
+                let red = Math.floor(255 * ratio);
+                let green = Math.floor(255 * (1 - ratio));
+                const dynamicColor = `rgb(${red}, ${green}, 0)`;
+
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = `rgba(255, 215, 0, ${0.3 + timingCircle.pulseAlpha * 0.4})`;
+                ctx.strokeStyle = dynamicColor;
                 ctx.lineWidth = 15;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = dynamicColor;
                 ctx.stroke();
+                ctx.shadowBlur = 0;
+
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
-                // ==========================================================
-                // ✨✨ 핵심 수정 부분: 줄어드는 원의 색상을 동적으로 변경
-                // ==========================================================
-                const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
-                const maxDiffForColor = 50; // 색상 변화가 일어나는 최대 오차 범위
-                
-                // 오차(diff)에 따라 0(Perfect) ~ 1(Bad) 사이의 비율 계산
-                let ratio = Math.min(1, diff / maxDiffForColor); 
-                
-                // 비율에 따라 빨간색(255,0,0)과 초록색(0,255,0) 사이를 보간
-                let red = Math.floor(255 * ratio);
-                let green = Math.floor(255 * (1 - ratio));
-                const dynamicColor = `rgb(${red}, ${green}, 0)`;
-
-                // 2. 줄어드는 원 (계산된 색상 적용)
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = dynamicColor; // 동적 색상 적용
-                ctx.lineWidth = 5; // 눈에 잘 띄게 두께 조절
-                ctx.shadowBlur = 10; // 네온 효과
-                ctx.shadowColor = dynamicColor; // 네온 효과 색상
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.lineWidth = 3;
                 ctx.stroke();
-                ctx.shadowBlur = 0; // 다른 그림에 영향 없도록 초기화
 
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
-
                 if (timingCircle.shrinkingRadius < 0) {
                     timingCircle.isTiming = false;
                     gameOver();
                 }
             }
         }
-
+        
         function drawJudgment() {
             if (judgment.alpha > 0) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${judgment.alpha})`;
+                judgment.y += judgment.vy;
+                judgment.alpha -= 0.01; 
+                ctx.fillStyle = judgment.color;
+                ctx.globalAlpha = judgment.alpha;
                 ctx.font = 'bold 48px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText(judgment.text, canvas.width / 2, 250);
-                judgment.alpha -= 0.02;
+                ctx.shadowColor = 'black';
+                ctx.shadowBlur = 5;
+                ctx.fillText(judgment.text, judgment.x, judgment.y);
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
             }
         }
 
+        // ✨ 새로 추가된 부분: 획득 점수 텍스트 그리기 및 애니메이션
+        function drawPointFeedback() {
+            if (pointFeedback.alpha > 0) {
+                pointFeedback.y += pointFeedback.vy;
+                pointFeedback.alpha -= 0.015;
+
+                ctx.fillStyle = pointFeedback.color;
+                ctx.globalAlpha = pointFeedback.alpha;
+                ctx.font = 'bold 28px sans-serif'; // 메인 점수보다 작게
+                ctx.textAlign = 'center';
+                ctx.fillText(pointFeedback.text, pointFeedback.x, pointFeedback.y);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+        
         function trap() {
             if (gameState !== 'playing' || !timingCircle.isTiming) return;
 
             const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
             let points = 0;
             let judgmentText = '';
+            let judgmentColor = '';
 
             if (diff <= 5) {
-                points = 10; judgmentText = 'PERFECT!';
+                points = 10; judgmentText = 'PERFECT!'; judgmentColor = '#00FF7F';
             } else if (diff <= 10) {
-                points = 8; judgmentText = 'GREAT';
+                points = 8; judgmentText = 'GREAT'; judgmentColor = '#00BFFF';
             } else if (diff <= 20) {
-                points = 5; judgmentText = 'GOOD';
+                points = 5; judgmentText = 'GOOD'; judgmentColor = '#FFFFFF';
             } else if (diff <= 35) {
-                points = 1; judgmentText = 'BAD';
+                points = 1; judgmentText = 'BAD'; judgmentColor = '#FFA500';
             } else {
                 gameOver();
                 return;
             }
 
+            // 메인 점수 업데이트
             score += points;
             scoreEl.textContent = `SCORE: ${score}`;
-            judgment.text = judgmentText;
-            judgment.alpha = 1;
 
+            // 판정 텍스트 객체 설정
+            judgment.text = judgmentText;
+            judgment.color = judgmentColor;
+            judgment.alpha = 1;
+            judgment.x = timingCircle.x;
+            judgment.y = timingCircle.y - 20;
+
+            // ✨ 새로 추가된 부분: 획득 점수 텍스트 객체 설정
+            pointFeedback.text = `+${points}`;
+            pointFeedback.color = judgmentColor;
+            pointFeedback.alpha = 1;
+            pointFeedback.x = canvas.width / 2;
+            pointFeedback.y = 100; // SCORE 텍스트 아래 위치
+
+            // 다음 트래핑 준비
             ball.vy = -18;
             timingCircle.isTiming = false;
             timingCircle.shrinkSpeed += 0.1;
@@ -254,7 +277,9 @@
                 drawTimingCircle();
                 drawBall();
             }
-            drawJudgment();
+            // 그리기 순서: 점수 피드백 -> 판정 피드백 순으로 그려 겹치지 않게 함
+            drawPointFeedback();
+            drawJudgment(); 
             
             requestAnimationFrame(gameLoop);
         }
