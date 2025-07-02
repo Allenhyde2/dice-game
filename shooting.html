@@ -65,7 +65,7 @@
         const ctx = canvas.getContext('2d');
         const messageBox = document.getElementById('message-box');
 
-        let gameState = 'loading';
+        let gameState = 'ready';
         const keys = {};
 
         let score = 0;
@@ -250,7 +250,7 @@
         }
 
         // ==========================================================
-        // ✨✨ 핵심 수정 부분: 골키퍼 움직임 범위를 명확하게 수정
+        // ✨✨ 핵심 수정 부분: 골키퍼 움직임 범위 계산 수정
         // ==========================================================
         function update() {
             if (gameState === 'aiming' || gameState === 'powering') {
@@ -285,15 +285,17 @@
 
             if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
                 goalkeepers.forEach(keeper => {
-                    // 골키퍼의 중심점이 골대 영역 내에서만 움직이도록 경계 설정
-                    const minX = goal.x + keeper.width / 2;
-                    const maxX = goal.x + goal.width - keeper.width / 2;
-                    const minY = goal.y + keeper.height / 2;
-                    const maxY = goal.y + goal.height - keeper.height / 2;
+                    // 1. 골키퍼의 중심점이 이동할 경계를 정의
+                    // 골대 영역에서 좌우로 keeper.width, 상하로 keeper.height만큼 확장
+                    const minX = goal.x - keeper.width;
+                    const maxX = goal.x + goal.width;
+                    const minY = goal.y - keeper.height;
+                    const maxY = goal.y + goal.height;
 
                     keeper.x += keeper.speedX * keeper.directionX;
                     keeper.y += keeper.speedY * keeper.directionY;
-                    
+
+                    // 2. 확장된 경계 내에서 움직이도록 제한
                     if (keeper.x < minX || keeper.x > maxX) {
                         keeper.directionX *= -1;
                         keeper.x = Math.max(minX, Math.min(keeper.x, maxX));
