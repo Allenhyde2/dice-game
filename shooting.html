@@ -70,7 +70,7 @@
 
         let score = 0;
         let stage = 1;
-        let blockingKeeper = null; // ✨ 공을 막은 골키퍼를 저장할 변수
+        let blockingKeeper = null;
 
         const Z_GOAL = 150;
         const PERSPECTIVE = canvas.height * 0.8;
@@ -152,38 +152,19 @@
             ctx.closePath(); ctx.stroke();
         }
 
+        // ✨ 골키퍼 그리는 함수: 여러 개의 원으로 장갑 모양을 표현
         function drawGoalkeepers() {
             const drawGlove = (keeper) => {
-                const proj = project(keeper.x, keeper.y, Z_GOAL);
-                const w = keeper.width * proj.scale;
-                const h = keeper.height * proj.scale;
-                ctx.fillStyle = '#e67e22';
-                ctx.strokeStyle = '#d35400';
-                ctx.lineWidth = 2 * proj.scale;
-                const drawFinger = (x, y, width, height, angle) => {
-                    ctx.save();
-                    ctx.translate(x, y);
-                    ctx.rotate(angle);
+                // 충돌 판정에 사용된 hitboxParts를 기반으로 그림
+                keeper.hitboxParts.forEach(part => {
+                    const proj = project(keeper.x + part.offsetX, keeper.y + part.offsetY, Z_GOAL);
                     ctx.beginPath();
-                    ctx.roundRect(-width/2, -height, width, height, width/2);
+                    ctx.arc(proj.x, proj.y, part.radius * proj.scale, 0, Math.PI * 2);
+                    ctx.fillStyle = '#e67e22';
                     ctx.fill();
-                    ctx.stroke();
-                    ctx.restore();
-                };
-                ctx.beginPath();
-                ctx.ellipse(proj.x, proj.y, w * 0.4, h * 0.45, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-                const fingerW = w * 0.18;
-                const fingerH = h * 0.5;
-                drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
-                drawFinger(proj.x - w * 0.1, proj.y - h * 0.4, fingerW, fingerH, -0.05);
-                drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
-                drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
-                drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
+                });
             };
 
-            // ✨ 게임오버 시에는 공을 막은 골키퍼만, 그 외에는 모든 골키퍼를 그림
             if (gameState === 'gameOver' && blockingKeeper) {
                 drawGlove(blockingKeeper);
             } else if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
@@ -192,12 +173,9 @@
         }
 
         function drawBall() {
-            // ✨ 게임오버 시에도 공이 보이도록 조건 완화
             if (gameState === 'result' && gameState === 'nextStage') return;
-
             const proj = project(ball.x, ball.y, ball.z);
             if (proj.scale <= 0) return;
-            
             const radius = ball.radius * proj.scale;
             ctx.beginPath();
             ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
@@ -209,9 +187,11 @@
                     const angle = (Math.PI * 2 / sides) * i + rotation;
                     const x = centerX + Math.cos(angle) * size;
                     const y = centerY + Math.sin(angle) * size;
-                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
                 }
-                ctx.closePath(); ctx.fill();
+                ctx.closePath();
+                ctx.fill();
             };
             ctx.save();
             ctx.translate(proj.x, proj.y);
@@ -262,7 +242,6 @@
                 if (keys['ArrowRight']) target.x += 5;
                 if (keys['ArrowUp']) target.y -= 5;
                 if (keys['ArrowDown']) target.y += 5;
-
                 const minX = goal.x + target.size;
                 const maxX = goal.x + goal.width - target.size;
                 target.x = Math.max(minX, Math.min(maxX, target.x));
@@ -286,45 +265,52 @@
                     checkGoal();
                 }
             }
-            
-            // ✨ 골키퍼 AI 수정: 움직이는 범위를 골대보다 넓게 설정
+
             if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
-                const keeperAreaPadding = 50; // 골대 밖으로 얼마나 더 움직일지
-                
+                const keeperAreaPadding = 50;
                 goalkeepers.forEach(keeper => {
                     keeper.x += keeper.speedX * keeper.directionX;
                     keeper.y += keeper.speedY * keeper.directionY;
-
                     const minX = goal.x - keeperAreaPadding;
                     const maxX = goal.x + goal.width + keeperAreaPadding - keeper.width;
-                    if (keeper.x < minX || keeper.x > maxX) {
-                        keeper.directionX *= -1;
-                    }
+                    if (keeper.x < minX || keeper.x > maxX) { keeper.directionX *= -1; }
                     const minY = goal.y - keeperAreaPadding;
                     const maxY = goal.y + goal.height + keeperAreaPadding - keeper.height;
-                    if (keeper.y < minY || keeper.y > maxY) {
-                        keeper.directionY *= -1;
-                    }
+                    if (keeper.y < minY || keeper.y > maxY) { keeper.directionY *= -1; }
                 });
             }
         }
         
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 2: 충돌 판정 로직 전체 수정
+        // ==========================================================
         function checkGoal() {
+            gameState = 'result';
             let message = '';
             let isSaved = false;
 
-            goalkeepers.forEach(keeper => {
-                const closestX = Math.max(keeper.x, Math.min(ball.x, keeper.x + keeper.width));
-                const closestY = Math.max(keeper.y, Math.min(ball.y, keeper.y + keeper.height));
-                const distanceX = ball.x - closestX;
-                const distanceY = ball.y - closestY;
-                const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-                const requiredPenetration = ball.radius * 0.2;
-                if (distanceSquared < (ball.radius - requiredPenetration) * (ball.radius - requiredPenetration)) {
-                    isSaved = true;
-                    blockingKeeper = keeper; // ✨ 공을 막은 골키퍼 저장
+            // 모든 골키퍼와 충돌 검사
+            for (const keeper of goalkeepers) {
+                // 각 골키퍼의 모든 판정 영역(원)과 공의 충돌을 검사
+                for (const part of keeper.hitboxParts) {
+                    const partAbsX = keeper.x + part.offsetX;
+                    const partAbsY = keeper.y + part.offsetY;
+
+                    const distanceX = ball.x - partAbsX;
+                    const distanceY = ball.y - partAbsY;
+                    const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+
+                    // 두 원(공, 장갑 일부)의 겹치는 깊이 계산
+                    const penetration = (ball.radius + part.radius) - distance;
+                    // 공 반지름의 20% 이상 겹쳤을 때만 막은 것으로 판정
+                    if (penetration > ball.radius * 0.2) {
+                        isSaved = true;
+                        blockingKeeper = keeper;
+                        break; // 한 부분이라도 막혔으면 더 검사할 필요 없음
+                    }
                 }
-            });
+                if (isSaved) break; // 한 명의 키퍼라도 막았으면 더 검사할 필요 없음
+            }
 
             if (isSaved) {
                 gameState = 'gameOver';
@@ -346,13 +332,15 @@
                 messageBox.style.color = 'white';
                 messageBox.innerHTML = `${message}<div id="retry-message">RETRY? (Enter)</div>`;
             }
-
             messageBox.style.display = 'block';
         }
-
+        
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 3: 골키퍼 생성 시 판정 영역(hitbox) 설정
+        // ==========================================================
         function setupStage() {
             messageBox.style.display = 'none';
-            blockingKeeper = null; // ✨ 초기화
+            blockingKeeper = null;
             gameState = 'aiming';
             ball.x = canvas.width / 2;
             ball.y = canvas.height - 50;
@@ -363,14 +351,27 @@
             
             goalkeepers.length = 0;
             for (let i = 0; i < stage; i++) {
+                const keeperWidth = 100;
+                const keeperHeight = 120;
+                // 각 골키퍼의 판정 영역을 여러 개의 원으로 구성
+                const hitboxParts = [
+                    { offsetX: 0, offsetY: 0, radius: 45 },         // 손바닥
+                    { offsetX: -30, offsetY: -35, radius: 18 },     // 손가락1
+                    { offsetX: -10, offsetY: -40, radius: 18 },     // 손가락2
+                    { offsetX: 10, offsetY: -40, radius: 18 },      // 손가락3
+                    { offsetX: 30, offsetY: -35, radius: 18 },      // 손가락4
+                    { offsetX: -40, offsetY: 10, radius: 20 },      // 엄지
+                ];
+
                 goalkeepers.push({
-                    x: goal.x + Math.random() * (goal.width - 100),
-                    y: goal.y + Math.random() * (goal.height - 120),
-                    width: 100, height: 120,
+                    x: goal.x + Math.random() * (goal.width - keeperWidth),
+                    y: goal.y + Math.random() * (goal.height - keeperHeight),
+                    width: keeperWidth, height: keeperHeight,
                     speedX: 2 + Math.random() * 2,
                     speedY: 1 + Math.random() * 2,
                     directionX: Math.random() > 0.5 ? 1 : -1,
-                    directionY: Math.random() > 0.5 ? 1 : -1
+                    directionY: Math.random() > 0.5 ? 1 : -1,
+                    hitboxParts: hitboxParts // 판정 영역 정보 추가
                 });
             }
         }
@@ -405,16 +406,11 @@
             if (e.code === 'Space' && gameState === 'powering') {
                 e.preventDefault();
                 gameState = 'flying';
-                
                 const flightTime = 80 - (powerGauge.value / 100) * 50;
-                
                 const vy_initial = (target.y - ball.y - 0.5 * GRAVITY * flightTime * flightTime) / flightTime;
                 const vx_initial = (target.x - ball.x) / flightTime;
                 const vz_initial = Z_GOAL / flightTime;
-
-                ball.vx = vx_initial;
-                ball.vy = vy_initial;
-                ball.vz = vz_initial;
+                ball.vx = vx_initial; ball.vy = vy_initial; ball.vz = vz_initial;
             }
         });
 
