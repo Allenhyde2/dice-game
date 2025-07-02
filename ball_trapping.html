@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (v2.0)</title>
+    <title>축구 트래핑 타이밍 게임 (v2.1)</title>
     <style>
         body {
             display: flex;
@@ -81,7 +81,6 @@
         let gameState = 'loading';
         
         let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
-        // ✨ 새로 추가된 부분: 획득 점수 텍스트 객체
         let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
 
         const ball = {
@@ -191,15 +190,13 @@
             }
         }
 
-        // ✨ 새로 추가된 부분: 획득 점수 텍스트 그리기 및 애니메이션
         function drawPointFeedback() {
             if (pointFeedback.alpha > 0) {
                 pointFeedback.y += pointFeedback.vy;
                 pointFeedback.alpha -= 0.015;
-
                 ctx.fillStyle = pointFeedback.color;
                 ctx.globalAlpha = pointFeedback.alpha;
-                ctx.font = 'bold 28px sans-serif'; // 메인 점수보다 작게
+                ctx.font = 'bold 28px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(pointFeedback.text, pointFeedback.x, pointFeedback.y);
                 ctx.globalAlpha = 1.0;
@@ -227,25 +224,24 @@
                 return;
             }
 
-            // 메인 점수 업데이트
             score += points;
             scoreEl.textContent = `SCORE: ${score}`;
 
-            // 판정 텍스트 객체 설정
             judgment.text = judgmentText;
             judgment.color = judgmentColor;
             judgment.alpha = 1;
             judgment.x = timingCircle.x;
             judgment.y = timingCircle.y - 20;
 
-            // ✨ 새로 추가된 부분: 획득 점수 텍스트 객체 설정
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분: 획득 점수 텍스트 위치 변경
+            // ==========================================================
             pointFeedback.text = `+${points}`;
             pointFeedback.color = judgmentColor;
             pointFeedback.alpha = 1;
-            pointFeedback.x = canvas.width / 2;
-            pointFeedback.y = 100; // SCORE 텍스트 아래 위치
-
-            // 다음 트래핑 준비
+            pointFeedback.x = canvas.width / 2 + 80; // SCORE 글자 오른쪽으로 위치 조정
+            pointFeedback.y = 90; // SCORE 텍스트 바로 아래로 y좌표 조정
+            
             ball.vy = -18;
             timingCircle.isTiming = false;
             timingCircle.shrinkSpeed += 0.1;
@@ -277,7 +273,6 @@
                 drawTimingCircle();
                 drawBall();
             }
-            // 그리기 순서: 점수 피드백 -> 판정 피드백 순으로 그려 겹치지 않게 함
             drawPointFeedback();
             drawJudgment(); 
             
