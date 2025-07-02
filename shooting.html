@@ -1,38 +1,445 @@
-function checkGoal() {
-    let message = '';
-    let isSaved = false;
-
-    goalkeepers.forEach(keeper => {
-        const closestX = Math.max(keeper.x, Math.min(ball.x, keeper.x + keeper.width));
-        const closestY = Math.max(keeper.y, Math.min(ball.y, keeper.y + keeper.height));
-        const distanceX = ball.x - closestX;
-        const distanceY = ball.y - closestY;
-        const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-        if (distanceSquared < (ball.radius * ball.radius)) {
-            isSaved = true;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>3D 사커 챌린지 - 스테이지 모드</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1b3a1b;
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            color: white;
+            text-align: center;
         }
-    });
+        #game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        #game-container {
+            position: relative;
+            width: 900px;
+            height: 600px;
+            background: #275227;
+            border: 10px solid #5a3d2b;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+            cursor: none;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: bold;
+            text-shadow: 3px 3px 5px black;
+            color: gold;
+            text-align: center;
+        }
+        #retry-message {
+            font-size: 24px;
+            color: white;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
 
-    if (isSaved) {
-        gameState = 'gameOver'; // 게임오버 상태
-        message = 'NO GOAL!';
-        messageBox.style.color = '#ff4757';
-        messageBox.innerHTML = `GAME OVER<div id="retry-message">FINAL SCORE: ${score}<br>RETRY? (Enter)</div>`;
-    } else if (ball.x > goal.x && ball.x < goal.x + goal.width &&
-               ball.y > goal.y && ball.y < goal.y + goal.height) {
-        gameState = 'nextStage'; // ✨ 다음 스테이지 전환 상태
-        message = 'GOAL!';
-        messageBox.style.color = 'gold';
-        messageBox.innerHTML = `${message}<div id="retry-message">NEXT STAGE!</div>`;
-        score += 100;
-        stage += 1;
-        setTimeout(setupStage, 2000);
-    } else {
-        gameState = 'result'; // MISS일 때의 결과 상태
-        message = 'MISS';
-        messageBox.style.color = 'white';
-        messageBox.innerHTML = `${message}<div id="retry-message">RETRY? (Enter)</div>`;
-    }
+    <div id="game-wrapper">
+        <div id="game-container">
+            <canvas id="gameCanvas" width="900" height="600"></canvas>
+            <div id="message-box"></div>
+        </div>
+        <p>방향키로 조준, 스페이스바로 파워(속도) 조절!</p>
+    </div>
 
-    messageBox.style.display = 'block';
-}
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageBox = document.getElementById('message-box');
+
+        let gameState = 'loading';
+        const keys = {};
+
+        let score = 0;
+        let stage = 1;
+
+        const Z_GOAL = 150;
+        const PERSPECTIVE = canvas.height * 0.8;
+        const GRAVITY = 0.1;
+
+        const ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, radius: 30, rotation: 0 };
+        const target = { x: 0, y: 0, size: 25 };
+        const powerGauge = { value: 0, direction: 1, speed: 2 };
+        const goal = {
+            width: 750, height: 375,
+            x: (900 - 750) / 2, y: 50,
+            z: Z_GOAL, depth: 150
+        };
+        
+        const goalkeepers = [];
+
+        function project(x, y, z) {
+            const scale = PERSPECTIVE / (PERSPECTIVE + z);
+            return {
+                x: canvas.width / 2 + (x - canvas.width / 2) * scale,
+                y: canvas.height / 2 + (y - canvas.height / 2) * scale,
+                scale: scale
+            };
+        }
+
+        function drawField() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#318C31');
+            grad.addColorStop(1, '#276827');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.ellipse(canvas.width / 2, canvas.height, 400, 100, 0, Math.PI, Math.PI*2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height - 50, 100, Math.PI * 1.1, Math.PI * 1.9);
+            ctx.stroke();
+        }
+
+        function drawGoalPost() {
+            const p1 = project(goal.x, goal.y, goal.z);
+            const p2 = project(goal.x + goal.width, goal.y, goal.z);
+            const p3 = project(goal.x + goal.width, goal.y + goal.height, goal.z);
+            const p4 = project(goal.x, goal.y + goal.height, goal.z);
+            const p5 = project(goal.x, goal.y, goal.z + goal.depth);
+            const p6 = project(goal.x + goal.width, goal.y, goal.z + goal.depth);
+            const p7 = project(goal.x + goal.width, goal.y + goal.height, goal.z + goal.depth);
+            const p8 = project(goal.x, goal.y + goal.height, goal.z + goal.depth);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 2 * p1.scale;
+            const netDensity = 15;
+            const drawNet = (from1, to1, from2, to2) => {
+                for (let i = 1; i < netDensity; i++) {
+                    const ratio = i / netDensity;
+                    const x1 = from1.x + (to1.x - from1.x) * ratio;
+                    const y1 = from1.y + (to1.y - from1.y) * ratio;
+                    const x2 = from2.x + (to2.x - from2.x) * ratio;
+                    const y2 = from2.y + (to2.y - from2.y) * ratio;
+                    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+                }
+            };
+            drawNet(p5, p6, p8, p7); drawNet(p5, p8, p6, p7);
+            drawNet(p1, p2, p5, p6); drawNet(p1, p4, p5, p8);
+            drawNet(p2, p3, p6, p7);
+
+            ctx.strokeStyle = '#DDDDDD';
+            ctx.lineWidth = 15 * p1.scale;
+            ctx.beginPath();
+            ctx.moveTo(p5.x, p5.y); ctx.lineTo(p6.x, p6.y); ctx.lineTo(p2.x, p2.y);
+            ctx.moveTo(p6.x, p6.y); ctx.lineTo(p7.x, p7.y); ctx.lineTo(p3.x, p3.y);
+            ctx.moveTo(p7.x, p7.y); ctx.lineTo(p8.x, p8.y); ctx.lineTo(p4.x, p4.y);
+            ctx.moveTo(p8.x, p8.y); ctx.lineTo(p5.x, p5.y); ctx.lineTo(p1.x, p1.y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+            ctx.closePath(); ctx.stroke();
+        }
+
+        function drawGoalkeepers() {
+            if (gameState === 'result' || gameState === 'gameOver' || gameState === 'nextStage') return;
+            
+            const drawFinger = (x, y, width, height, angle) => {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.roundRect(-width/2, -height, width, height, width/2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            goalkeepers.forEach(keeper => {
+                const proj = project(keeper.x, keeper.y, Z_GOAL);
+                const w = keeper.width * proj.scale;
+                const h = keeper.height * proj.scale;
+
+                ctx.fillStyle = '#e67e22';
+                ctx.strokeStyle = '#d35400';
+                ctx.lineWidth = 2 * proj.scale;
+                
+                ctx.beginPath();
+                ctx.ellipse(proj.x, proj.y, w * 0.4, h * 0.45, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                const fingerW = w * 0.18;
+                const fingerH = h * 0.5;
+                drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
+                drawFinger(proj.x - w * 0.1, proj.y - h * 0.4, fingerW, fingerH, -0.05);
+                drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
+                drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
+                drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
+            });
+        }
+
+        function drawBall() {
+            const proj = project(ball.x, ball.y, ball.z);
+            if (proj.scale <= 0) return;
+            
+            const radius = ball.radius * proj.scale;
+            
+            ctx.beginPath();
+            ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+
+            const drawPolygon = (sides, centerX, centerY, size, rotation) => {
+                ctx.beginPath();
+                for (let i = 0; i < sides; i++) {
+                    const angle = (Math.PI * 2 / sides) * i + rotation;
+                    const x = centerX + Math.cos(angle) * size;
+                    const y = centerY + Math.sin(angle) * size;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+            };
+            
+            ctx.save();
+            ctx.translate(proj.x, proj.y);
+            ctx.rotate(ball.rotation);
+            
+            const patchSize = radius * 0.4;
+            const patchDist = radius * 0.7;
+
+            ctx.fillStyle = 'black';
+            drawPolygon(5, 0, 0, patchSize, 0);
+
+            for (let i = 0; i < 5; i++) {
+                const angle = (Math.PI * 2 / 5) * i + Math.PI / 5;
+                const x = Math.cos(angle) * patchDist;
+                const y = Math.sin(angle) * patchDist;
+                drawPolygon(6, x, y, patchSize, 0);
+            }
+            
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2 * proj.scale;
+            ctx.stroke();
+        }
+
+        function drawTarget() {
+             if (gameState !== 'aiming' && gameState !== 'powering') return;
+             const proj = project(target.x, target.y, Z_GOAL);
+             ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
+             ctx.lineWidth = 3;
+             ctx.beginPath();
+             ctx.arc(proj.x, proj.y, target.size * proj.scale, 0, Math.PI * 2);
+             ctx.moveTo(proj.x - target.size * proj.scale, proj.y);
+             ctx.lineTo(proj.x + target.size * proj.scale, proj.y);
+             ctx.moveTo(proj.x, proj.y - target.size * proj.scale);
+             ctx.lineTo(proj.x, proj.y + target.size * proj.scale);
+             ctx.stroke();
+        }
+        
+        function drawUI() {
+            ctx.fillStyle = 'white';
+            ctx.font = '24px "Pretendard", sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`STAGE: ${stage}`, 20, 40);
+            ctx.fillText(`SCORE: ${score}`, 20, 70);
+        }
+
+        function update() {
+            if (gameState === 'aiming' || gameState === 'powering') {
+                if (keys['ArrowLeft']) target.x -= 5;
+                if (keys['ArrowRight']) target.x += 5;
+                if (keys['ArrowUp']) target.y -= 5;
+                if (keys['ArrowDown']) target.y += 5;
+
+                const minX = goal.x + target.size;
+                const maxX = goal.x + goal.width - target.size;
+                target.x = Math.max(minX, Math.min(maxX, target.x));
+                const minY = goal.y + target.size;
+                const maxY = goal.y + goal.height - target.size;
+                target.y = Math.max(minY, Math.min(maxY, target.y));
+            } 
+            
+            if (gameState === 'powering') {
+                powerGauge.value += powerGauge.direction * powerGauge.speed;
+                if (powerGauge.value > 100 || powerGauge.value < 0) {
+                    powerGauge.direction *= -1;
+                    powerGauge.value = Math.max(0, Math.min(100, powerGauge.value));
+                }
+            } else if (gameState === 'flying') {
+                ball.vy += GRAVITY; ball.x += ball.vx;
+                ball.y += ball.vy; ball.z += ball.vz;
+                ball.rotation += ball.vx * 0.01;
+                if (ball.z >= Z_GOAL) {
+                    ball.z = Z_GOAL;
+                    checkGoal();
+                }
+            }
+
+            if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
+                goalkeepers.forEach(keeper => {
+                    keeper.x += keeper.speedX * keeper.directionX;
+                    keeper.y += keeper.speedY * keeper.directionY;
+
+                    if (keeper.x < goal.x || keeper.x + keeper.width > goal.x + goal.width) {
+                        keeper.directionX *= -1;
+                    }
+                    if (keeper.y < goal.y || keeper.y + keeper.height > goal.y + goal.height) {
+                        keeper.directionY *= -1;
+                    }
+                });
+            }
+        }
+        
+        function checkGoal() {
+            let message = '';
+            let isSaved = false;
+
+            goalkeepers.forEach(keeper => {
+                const closestX = Math.max(keeper.x, Math.min(ball.x, keeper.x + keeper.width));
+                const closestY = Math.max(keeper.y, Math.min(ball.y, keeper.y + keeper.height));
+                const distanceX = ball.x - closestX;
+                const distanceY = ball.y - closestY;
+                const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+                if (distanceSquared < (ball.radius * ball.radius)) {
+                    isSaved = true;
+                }
+            });
+
+            if (isSaved) {
+                gameState = 'gameOver';
+                message = 'NO GOAL!';
+                messageBox.style.color = '#ff4757';
+                messageBox.innerHTML = `GAME OVER<div id="retry-message">FINAL SCORE: ${score}<br>RETRY? (Enter)</div>`;
+            } else if (ball.x > goal.x && ball.x < goal.x + goal.width &&
+                       ball.y > goal.y && ball.y < goal.y + goal.height) {
+                // ✨ 버그 수정: gameState를 'nextStage'로 변경
+                gameState = 'nextStage';
+                message = 'GOAL!';
+                messageBox.style.color = 'gold';
+                messageBox.innerHTML = `${message}<div id="retry-message">NEXT STAGE!</div>`;
+                score += 100;
+                stage += 1;
+                setTimeout(setupStage, 2000);
+            } else {
+                gameState = 'result';
+                message = 'MISS';
+                messageBox.style.color = 'white';
+                messageBox.innerHTML = `${message}<div id="retry-message">RETRY? (Enter)</div>`;
+            }
+
+            messageBox.style.display = 'block';
+        }
+
+        function setupStage() {
+            messageBox.style.display = 'none';
+            gameState = 'aiming';
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height - 50;
+            ball.z = 0;
+            ball.rotation = 0;
+            target.x = canvas.width / 2;
+            target.y = goal.y + goal.height / 2;
+            
+            goalkeepers.length = 0;
+            for (let i = 0; i < stage; i++) {
+                goalkeepers.push({
+                    x: goal.x + Math.random() * (goal.width - 100),
+                    y: goal.y + Math.random() * (goal.height - 120),
+                    width: 100, height: 120,
+                    speedX: 2 + Math.random() * 2,
+                    speedY: 1 + Math.random() * 2,
+                    directionX: Math.random() > 0.5 ? 1 : -1,
+                    directionY: Math.random() > 0.5 ? 1 : -1
+                });
+            }
+        }
+
+        function startGame() {
+            score = 0;
+            stage = 1;
+            setupStage();
+        }
+
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && (gameState === 'aiming' || gameState === 'powering')) {
+                e.preventDefault();
+                if (gameState === 'aiming') {
+                    gameState = 'powering';
+                    powerGauge.value = 0;
+                    powerGauge.direction = 1;
+                }
+            } 
+            // ✨ 버그 수정: 'nextStage' 상태일 때는 Enter키가 작동하지 않도록 함
+            else if (e.code === 'Enter' && (gameState === 'result' || gameState === 'gameOver')) {
+                if (gameState === 'gameOver') {
+                    startGame();
+                } else {
+                    setupStage();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            keys[e.code] = false;
+            if (e.code === 'Space' && gameState === 'powering') {
+                e.preventDefault();
+                gameState = 'flying';
+                
+                const flightTime = 80 - (powerGauge.value / 100) * 50;
+                
+                const vy_initial = (target.y - ball.y - 0.5 * GRAVITY * flightTime * flightTime) / flightTime;
+                const vx_initial = (target.x - ball.x) / flightTime;
+                const vz_initial = Z_GOAL / flightTime;
+
+                ball.vx = vx_initial;
+                ball.vy = vy_initial;
+                ball.vz = vz_initial;
+            }
+        });
+
+        function drawPowerGauge() {
+            if (gameState !== 'powering') return;
+            const barX = canvas.width / 2 - 150, barY = canvas.height - 40;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(barX, barY, 300, 30);
+            const gaugeWidth = (powerGauge.value / 100) * 300;
+            ctx.fillStyle = `hsl(${120 - powerGauge.value}, 100%, 50%)`;
+            ctx.fillRect(barX, barY, gaugeWidth, 30);
+        }
+        
+        function gameLoop() {
+            update();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawField();
+            drawGoalkeepers();
+            drawGoalPost();
+            drawBall();
+            drawTarget();
+            drawPowerGauge();
+            drawUI();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        startGame();
+        gameLoop();
+    </script>
+</body>
+</html>
