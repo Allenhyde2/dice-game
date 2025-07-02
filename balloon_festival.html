@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>서커스 다트 챌린지</title>
+    <title>3D 다트 챌린지</title>
     <style>
         body {
             display: flex;
@@ -25,12 +25,12 @@
             position: relative;
             width: 900px;
             height: 600px;
-            /* 서커스 부스 이미지로 배경 변경 */
             background: url('https://img.freepik.com/free-vector/amusement-park-game-booth-with-balloons_107791-2092.jpg?w=1380') no-repeat center center;
             background-size: cover;
             border: 10px solid #c99356;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            cursor: none; /* 마우스 커서 숨기기 */
         }
         #score-display {
             font-size: 32px;
@@ -67,32 +67,40 @@
         const scoreEl = document.getElementById('score-display');
         const messageBox = document.getElementById('message-box');
 
-        let gameState = 'loading'; // loading, ready, powering, result, gameOver
+        let gameState = 'loading'; // aiming, powering, throwing, result, gameOver
         let score = 0;
         const balloons = [];
         const particles = [];
-        const TARGET_COLUMN = 4; // 정중앙 5번째 줄(0부터 시작)을 목표로 설정
 
-        // 다트는 이제 결과 표시용
-        const dart = { x: -100, y: -100, width: 10, height: 30 };
+        // 3D 관련 상수
+        const Z_WALL = 100; // 벽의 Z 위치
+        const PERSPECTIVE = canvas.height * 0.8; // 원근감 정도
+        const GRAVITY = 0.2;
 
-        const powerGauge = {
-            value: 0,
-            direction: 1,
-            speed: 4
-        };
+        const dart = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 50 };
+        const target = { x: canvas.width / 2, y: canvas.height / 2, size: 30 };
+
+        const powerGauge = { value: 0, direction: 1, speed: 4 };
+
+        function project(x, y, z) {
+            const scale = PERSPECTIVE / (PERSPECTIVE + z);
+            return {
+                x: canvas.width / 2 + (x - canvas.width / 2) * scale,
+                y: canvas.height / 2 + (y - canvas.height / 2) * scale,
+                scale: scale
+            };
+        }
 
         function setupBalloons() {
             balloons.length = 0;
-            const rows = 5; // 세로 5개
-            const cols = 10; // 가로 10개
+            const rows = 5;
+            const cols = 10;
             const balloonWidth = 60;
             const balloonHeight = 75;
             const paddingX = 25;
             const paddingY = 15;
             const offsetX = (canvas.width - (cols * (balloonWidth + paddingX)) + paddingX) / 2;
             const offsetY = 70;
-            const colors = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#9c88ff'];
             const pointValues = [10, 10, 20, 20, 50, 50, 100, 200, 500];
 
             for (let r = 0; r < rows; r++) {
@@ -100,9 +108,10 @@
                     balloons.push({
                         x: offsetX + c * (balloonWidth + paddingX),
                         y: offsetY + r * (balloonHeight + paddingY),
+                        z: Z_WALL,
                         width: balloonWidth,
                         height: balloonHeight,
-                        color: colors[r % colors.length],
+                        color: '#e74c3c', // 빨간색으로 통일
                         isPopped: false,
                         points: pointValues[Math.floor(Math.random() * pointValues.length)]
                     });
@@ -111,131 +120,147 @@
         }
 
         function drawBalloons() {
-            balloons.forEach((b, index) => {
+            balloons.forEach(b => {
+                const proj = project(b.x, b.y, b.z);
                 if (!b.isPopped) {
                     ctx.beginPath();
                     ctx.fillStyle = b.color;
-                    ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, b.height / 2, 0, 0, Math.PI * 2);
+                    const w = b.width * proj.scale;
+                    const h = b.height * proj.scale;
+                    ctx.ellipse(proj.x + w / 2, proj.y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.beginPath();
-                    ctx.moveTo(b.x + b.width / 2, b.y + b.height);
-                    ctx.lineTo(b.x + b.width / 2 - 5, b.y + b.height + 5);
-                    ctx.lineTo(b.x + b.width / 2 + 5, b.y + b.height + 5);
-                    ctx.closePath();
-                    ctx.fill();
-                }
-
-                // 타겟 라인 표시
-                if (gameState === 'ready' || gameState === 'powering') {
-                    if (index % 10 === TARGET_COLUMN) {
-                        ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
-                        ctx.fillRect(b.x, b.y, b.width, b.height);
-                    }
                 }
             });
         }
+        
+        function drawDart(x, y, scale) {
+            const size = dart.size * scale;
+            const tipY = y - size * 0.5;
+            const bodyY = y + size * 0.2;
+            const finY = y + size * 0.5;
 
-        function drawDart() {
-             if (gameState === 'result' || gameState === 'gameOver') {
-                ctx.fillStyle = '#4b4b4b';
-                ctx.beginPath();
-                ctx.moveTo(dart.x, dart.y - dart.height);
-                ctx.lineTo(dart.x - dart.width / 2, dart.y);
-                ctx.lineTo(dart.x + dart.width / 2, dart.y);
-                ctx.closePath();
-                ctx.fill();
-                ctx.fillStyle = 'red';
-                ctx.fillRect(dart.x - dart.width, dart.y, dart.width * 2, 5);
-             }
+            // Fins (뒤쪽 날개)
+            ctx.fillStyle = '#c0392b';
+            ctx.beginPath();
+            ctx.moveTo(x, bodyY);
+            ctx.lineTo(x - size * 0.4, finY);
+            ctx.lineTo(x + size * 0.4, finY);
+            ctx.closePath();
+            ctx.fill();
+
+            // Body
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(x - size * 0.08, tipY, size * 0.16, size * 0.7);
+
+            // Tip (앞쪽 뾰족한 부분)
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.moveTo(x, tipY - size * 0.2);
+            ctx.lineTo(x - size * 0.1, tipY);
+            ctx.lineTo(x + size * 0.1, tipY);
+            ctx.closePath();
+            ctx.fill();
         }
 
-        function drawPowerGauge() {
+        function drawTarget() {
+             if (gameState !== 'aiming') return;
+             const proj = project(target.x, target.y, Z_WALL);
+             ctx.strokeStyle = 'yellow';
+             ctx.lineWidth = 2;
+             ctx.beginPath();
+             ctx.arc(proj.x, proj.y, target.size * proj.scale, 0, Math.PI * 2);
+             ctx.moveTo(proj.x - target.size * proj.scale, proj.y);
+             ctx.lineTo(proj.x + target.size * proj.scale, proj.y);
+             ctx.moveTo(proj.x, proj.y - target.size * proj.scale);
+             ctx.lineTo(proj.x, proj.y + target.size * proj.scale);
+             ctx.stroke();
+        }
+        
+        function drawTrajectory() {
             if (gameState !== 'powering') return;
-            const barX = canvas.width / 2 - 150;
-            const barY = canvas.height - 60;
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            ctx.fillRect(barX, barY, 300, 30);
+            
+            const launchVy = -15 - (powerGauge.value / 100) * 15;
+            const timeToWall = Z_WALL / (dart.size * 0.2);
 
-            const gaugeWidth = (powerGauge.value / 100) * 300;
-            ctx.fillStyle = `hsl(${120 - powerGauge.value}, 100%, 50%)`; // Green to Red
-            ctx.fillRect(barX, barY, gaugeWidth, 30);
+            let tempX = dart.x;
+            let tempY = dart.y;
+            let tempZ = dart.z;
+            let tempVx = (target.x - tempX) / timeToWall;
+            let tempVy = launchVy;
+            let tempVz = (Z_WALL - tempZ) / timeToWall;
+
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+
+            const startProj = project(tempX, tempY, tempZ);
+            ctx.moveTo(startProj.x, startProj.y);
+
+            for(let t = 0; t < timeToWall; t++) {
+                tempVy += GRAVITY;
+                tempX += tempVx;
+                tempY += tempVy;
+                tempZ += tempVz;
+                if(tempZ > Z_WALL) break;
+
+                const proj = project(tempX, tempY, tempZ);
+                ctx.lineTo(proj.x, proj.y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
 
-        function drawParticles() {
-            particles.forEach((p, index) => {
-                p.alpha -= 0.02;
-                if (p.alpha <= 0) {
-                    particles.splice(index, 1);
+        function update() {
+            if (gameState === 'aiming') {
+                // 키보드 입력으로 조작 (아래 이벤트 리스너에서 처리)
+            } else if (gameState === 'powering') {
+                powerGauge.value += powerGauge.direction * powerGauge.speed;
+                if (powerGauge.value > 100 || powerGauge.value < 0) {
+                    powerGauge.direction *= -1;
+                    powerGauge.value = Math.max(0, Math.min(100, powerGauge.value));
                 }
-                p.x += p.vx;
-                p.y += p.vy;
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
-                ctx.fillRect(p.x, p.y, p.size, p.size);
-                ctx.globalAlpha = 1.0;
-            });
-        }
+            } else if (gameState === 'throwing') {
+                dart.vy += GRAVITY;
+                dart.x += dart.vx;
+                dart.y += dart.vy;
+                dart.z += dart.vz;
 
-        function createParticles(x, y, color) {
-            for (let i = 0; i < 20; i++) {
-                particles.push({
-                    x, y,
-                    vx: (Math.random() - 0.5) * 4,
-                    vy: (Math.random() - 0.5) * 4,
-                    size: Math.random() * 3 + 1,
-                    color: color,
-                    alpha: 1
-                });
+                if (dart.z >= Z_WALL) {
+                    dart.z = Z_WALL;
+                    checkCollision();
+                    gameState = 'result';
+                    setTimeout(gameOver, 1500);
+                }
             }
         }
         
-        function updatePowerGauge() {
-            if (gameState !== 'powering') return;
-            powerGauge.value += powerGauge.direction * powerGauge.speed;
-            if (powerGauge.value > 100 || powerGauge.value < 0) {
-                powerGauge.direction *= -1;
-                powerGauge.value = Math.max(0, Math.min(100, powerGauge.value));
+        function checkCollision() {
+            for(const b of balloons) {
+                if (!b.isPopped &&
+                    dart.x > b.x && dart.x < b.x + b.width &&
+                    dart.y > b.y && dart.y < b.y + b.height)
+                {
+                    b.isPopped = true;
+                    score = b.points;
+                    scoreEl.textContent = `SCORE: ${score}`;
+                    // 파티클 효과는 투사된 위치에서 발생
+                    const proj = project(b.x, b.y, b.z);
+                    createParticles(proj.x + (b.width/2 * proj.scale), proj.y + (b.height/2 * proj.scale), b.color);
+                    break;
+                }
             }
-        }
-
-        function throwDart() {
-            gameState = 'result';
-            
-            // 파워에 따라 맞출 풍선 결정
-            // 0-19: 맨 아래, 20-39: 4번째... 80-100: 맨 위
-            const power = powerGauge.value;
-            const targetRow = 4 - Math.floor(power / 20.01);
-            
-            const balloonIndex = targetRow * 10 + TARGET_COLUMN;
-            const targetBalloon = balloons[balloonIndex];
-
-            if (targetBalloon && !targetBalloon.isPopped) {
-                targetBalloon.isPopped = true;
-                score = targetBalloon.points;
-                scoreEl.textContent = `SCORE: ${score}`;
-                
-                // 다트를 터진 풍선 중앙에 표시
-                dart.x = targetBalloon.x + targetBalloon.width / 2;
-                dart.y = targetBalloon.y + targetBalloon.height / 2;
-
-                createParticles(dart.x, dart.y, targetBalloon.color);
-            }
-
-            setTimeout(gameOver, 1000);
         }
 
         function startGame() {
             messageBox.style.display = 'none';
             score = 0;
-            scoreEl.textContent = `SCORE: ${score}`;
+            scoreEl.textContent = `SCORE: 0`;
             setupBalloons();
-            dart.x = -100; dart.y = -100;
-            messageBox.innerHTML = '스페이스바를 눌러 파워를 조절하세요!';
-            messageBox.style.display = 'block';
-            setTimeout(() => {
-                messageBox.style.display = 'none';
-                gameState = 'ready';
-            }, 2000);
+            gameState = 'aiming';
+            dart.x = canvas.width / 2;
+            dart.y = canvas.height + 100; // 화면 아래에서 시작
+            dart.z = -150;
         }
 
         function gameOver() {
@@ -243,19 +268,11 @@
             messageBox.innerHTML = `획득 포인트: ${score}점<br><br>다시 하려면 Enter를 누르세요`;
             messageBox.style.display = 'block';
         }
-
-        function gameLoop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawBalloons();
-            drawDart();
-            drawPowerGauge();
-            drawParticles();
-            updatePowerGauge();
-            requestAnimationFrame(gameLoop);
-        }
-
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && gameState === 'ready') {
+        
+        const keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && gameState === 'aiming') {
                 e.preventDefault();
                 gameState = 'powering';
                 powerGauge.value = 0;
@@ -264,13 +281,46 @@
                 startGame();
             }
         });
-
-        window.addEventListener('keyup', (e) => {
+        window.addEventListener('keyup', e => {
+            keys[e.code] = false;
             if (e.code === 'Space' && gameState === 'powering') {
                 e.preventDefault();
-                throwDart();
+                gameState = 'throwing';
+                
+                const launchVy = -15 - (powerGauge.value / 100) * 15;
+                const timeToWall = Z_WALL / (dart.size * 0.2);
+
+                dart.vx = (target.x - dart.x) / timeToWall;
+                dart.vy = launchVy;
+                dart.vz = (Z_WALL - dart.z) / timeToWall;
             }
         });
+        
+        function handleAiming() {
+            if (gameState !== 'aiming') return;
+            if (keys['ArrowLeft']) target.x -= 5;
+            if (keys['ArrowRight']) target.x += 5;
+            target.x = Math.max(0, Math.min(canvas.width, target.x));
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            handleAiming();
+            update();
+            
+            drawBalloons();
+            drawTarget();
+            drawTrajectory();
+            
+            const dartProj = project(dart.x, dart.y, dart.z);
+            drawDart(dartProj.x, dartProj.y, dartProj.scale);
+            
+            drawParticles();
+            drawPowerGauge();
+            
+            requestAnimationFrame(gameLoop);
+        }
 
         startGame();
         gameLoop();
