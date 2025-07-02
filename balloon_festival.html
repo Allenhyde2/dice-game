@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>3D 다트 챌린지 FINAL</title>
+    <title>사커 다트 챌린지</title>
     <style>
         body {
             display: flex;
@@ -10,7 +10,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #3d2d24;
+            background-color: #1a472a; /* 어두운 잔디색 */
             font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
             color: white;
             text-align: center;
@@ -25,8 +25,10 @@
             position: relative;
             width: 900px;
             height: 600px;
-            background: #4a6c8c;
-            border: 10px solid #c99356;
+            /* ✨ 배경을 축구장 이미지로 변경 */
+            background: url('https://img.freepik.com/free-photo/green-grass-soccer-field_99433-2315.jpg?w=1380') no-repeat center center;
+            background-size: cover;
+            border: 10px solid #5a3d2b;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             overflow: hidden;
@@ -88,17 +90,15 @@
 
         function setupBalloons() {
             balloons.length = 0;
-            // ==========================================================
-            // ✨✨ 핵심 수정 부분: 풍선 크기와 간격 조정
-            // ==========================================================
             const rows = 4, cols = 8;
-            const balloonWidth = 90;  // 풍선 너비 증가
-            const balloonHeight = 115; // 풍선 높이 증가
-            const paddingX = 5;      // 좌우 간격 감소
-            const paddingY = 5;      // 상하 간격 감소
+            const balloonWidth = 90;
+            const balloonHeight = 115;
+            const paddingX = 5;
+            const paddingY = 5;
 
+            // ✨ 풍선 위치를 골대 안에 맞게 조정
             const startX = (canvas.width - (cols * (balloonWidth + paddingX)) + paddingX) / 2;
-            const startY = 65; // 시작 위치 미세 조정
+            const startY = 120;
             const pointValues = [10, 10, 20, 20, 50, 50, 100, 200, 500];
 
             for (let r = 0; r < rows; r++) {
@@ -116,38 +116,45 @@
             }
         }
 
-        function drawTent() {
-            const stripeWidth = 40, topCurtainHeight = 60, sideCurtainWidth = 120;
-            const colors = ['#d63031', '#f1f2f6'];
-            for (let i = 0; i < canvas.width / stripeWidth; i++) {
-                ctx.fillStyle = colors[i % 2];
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분: 골대 그리기 함수 추가
+        // ==========================================================
+        function drawGoalPost() {
+            const postWidth = canvas.width * 0.8;
+            const postHeight = canvas.height * 0.8;
+            const postX = (canvas.width - postWidth) / 2;
+            const postY = 50;
+
+            const proj = project(postX, postY, Z_WALL);
+            const projWidth = postWidth * proj.scale;
+            const projHeight = postHeight * proj.scale;
+            const projX = (canvas.width - projWidth) / 2;
+            const projY = postY * proj.scale;
+
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 15 * proj.scale;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 10;
+            
+            // 골대 프레임
+            ctx.strokeRect(projX, projY, projWidth, projHeight);
+
+            // 골대 그물
+            ctx.lineWidth = 2 * proj.scale;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            for(let i = 1; i < 10; i++) {
+                // 세로선
                 ctx.beginPath();
-                ctx.moveTo(i * stripeWidth, 0); ctx.lineTo((i + 1) * stripeWidth, 0); ctx.lineTo((i + 0.5) * stripeWidth, topCurtainHeight);
-                ctx.closePath(); ctx.fill();
-            }
-            for (let i = 0; i < canvas.height / stripeWidth; i++) {
-                ctx.fillStyle = colors[i % 2];
-                ctx.fillRect(0, i * stripeWidth, sideCurtainWidth, stripeWidth);
-                ctx.fillRect(canvas.width - sideCurtainWidth, i * stripeWidth, sideCurtainWidth, stripeWidth);
-            }
-        }
-        
-        function drawWall() {
-            const wallCurrentX = wall.x;
-            const wallProj = project(wallCurrentX, 0, Z_WALL);
-            const wallWidth = canvas.width * wallProj.scale * 1.2;
-            const wallHeight = canvas.height * wallProj.scale * 1.1;
-            const wallX = (canvas.width - wallWidth) / 2 + (wallCurrentX * wallProj.scale);
-            const wallY = 60;
-            ctx.fillStyle = '#8B4513';
-            ctx.fillRect(wallX, wallY, wallWidth, wallHeight);
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.lineWidth = 2 * wallProj.scale;
-            for (let i = 0; i < 15; i++) {
+                ctx.moveTo(projX + i * (projWidth / 10), projY);
+                ctx.lineTo(projX + i * (projWidth / 10), projY + projHeight);
+                ctx.stroke();
+                // 가로선
                 ctx.beginPath();
-                ctx.moveTo(wallX + (i * wallWidth / 15), wallY); ctx.lineTo(wallX + (i * wallWidth / 15), wallY + wallHeight);
+                ctx.moveTo(projX, projY + i * (projHeight / 10));
+                ctx.lineTo(projX + projWidth, projY + i * (projHeight / 10));
                 ctx.stroke();
             }
+            ctx.shadowBlur = 0;
         }
 
         function drawBalloons() {
@@ -258,10 +265,7 @@
                     break;
                 }
             }
-            // MISS가 발생하지 않으므로 MISS 처리는 사실상 불필요하지만, 만약을 위해 남겨둠
-            if (!hit) {
-                score = 0;
-            }
+            if (!hit) { score = 0; }
             setTimeout(gameOver, 1500);
         }
 
@@ -324,9 +328,11 @@
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             update();
-            drawTent();
-            drawWall();
+            
+            // ✨ 그리기 순서 변경: 골대 -> 풍선
+            drawGoalPost();
             drawBalloons();
+
             const dartProj = project(dart.x, dart.y, dart.z);
             if (gameState !== 'ready') {
                  drawDart(dartProj.x, dartProj.y, dartProj.scale);
