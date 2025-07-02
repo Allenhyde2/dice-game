@@ -223,11 +223,18 @@
         }
 
         function calculateLaunchVy(power) {
-            const topY = balloons[0].baseY + balloons[0].height / 2;
-            const bottomY = balloons[balloons.length - 1].baseY + balloons[balloons.length - 1].height / 2;
-            const targetY = bottomY - (power / 100) * (bottomY - topY);
-            return (targetY - dart.y - 0.5 * GRAVITY * FLIGHT_TIME * FLIGHT_TIME) / FLIGHT_TIME;
-        }
+    const topY = balloons[0].baseY + balloons[0].height / 2;
+    const bottomY = balloons[balloons.length - 1].baseY + balloons[balloons.length - 1].height / 2;
+    let targetY = bottomY - (power / 100) * (bottomY - topY); // 팁이 최종적으로 도달할 y좌표
+
+    // ✨ 다트의 팁이 목표(targetY)에 맞도록 중심점의 목표 위치를 보정
+    const tipOffset = dart.size * 0.6;
+    targetY += tipOffset;
+
+    // 보정된 목표 위치에 도달하기 위한 초기 속도 계산
+    const vy_initial = (targetY - dart.y - 0.5 * GRAVITY * FLIGHT_TIME * FLIGHT_TIME) / FLIGHT_TIME;
+    return vy_initial;
+}
         
         function drawScoreNote() {
             if (!scoreNote.isShowing) return;
@@ -273,28 +280,34 @@
         }
         
         function checkCollision() {
-            gameState = 'result';
-            let hit = false;
-            for(const b of balloons) {
-                const currentBalloonX = b.baseX + wall.x;
-                if (!b.isPopped && dart.x > currentBalloonX && dart.x < currentBalloonX + b.width && dart.y > b.baseY && dart.y < b.baseY + b.height) {
-                    b.isPopped = true;
-                    score = b.points;
-                    const proj = project(currentBalloonX, b.baseY, b.z);
-                    createParticles(proj.x + (b.width/2*proj.scale), proj.y + (b.height/2*proj.scale), b.color);
-                    scoreNote = {
-                        text: `${score} 점`,
-                        x: proj.x + (b.width / 2 * proj.scale),
-                        y: proj.y + (b.height / 2 * proj.scale),
-                        scale: 0, alpha: 0, isShowing: true
-                    };
-                    hit = true;
-                    break;
-                }
-            }
-            if (!hit) { score = 0; }
-            setTimeout(gameOver, 1500);
+    gameState = 'result';
+    let hit = false;
+    
+    // ✨ 다트의 중심이 아닌 뾰족한 끝 부분의 y좌표를 계산
+    const tipOffset = dart.size * 0.6; // 다트 중심과 끝의 거리
+    const dartTipY = dart.y - tipOffset;
+
+    for(const b of balloons) {
+        const currentBalloonX = b.baseX + wall.x;
+        // ✨ dart.y 대신 dartTipY로 충돌 여부를 확인
+        if (!b.isPopped && dart.x > currentBalloonX && dart.x < currentBalloonX + b.width && dartTipY > b.baseY && dartTipY < b.baseY + b.height) {
+            b.isPopped = true;
+            score = b.points;
+            const proj = project(currentBalloonX, b.baseY, b.z);
+            createParticles(proj.x + (b.width/2*proj.scale), proj.y + (b.height/2*proj.scale), b.color);
+            scoreNote = {
+                text: `${score} 점`,
+                x: proj.x + (b.width / 2 * proj.scale),
+                y: proj.y + (b.height / 2 * proj.scale),
+                scale: 0, alpha: 0, isShowing: true
+            };
+            hit = true;
+            break;
         }
+    }
+    if (!hit) { score = 0; }
+    setTimeout(gameOver, 1500);
+}
 
         function createParticles(x,y,c){for(let i=0;i<20;i++){particles.push({x,y,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,s:Math.random()*3+1,c,a:1})}}
         function drawParticles(){particles.forEach((p,i)=>{p.a-=.02;if(p.a<=0)particles.splice(i,1);p.x+=p.vx;p.y+=p.vy;ctx.globalAlpha=p.a;ctx.fillStyle=p.c;ctx.fillRect(p.x,p.y,p.s,p.s);ctx.globalAlpha=1})}
