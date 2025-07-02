@@ -61,4 +61,159 @@
 <body>
 
     <h1>트래핑 챌린지</h1>
-    <div
+    <div id="game-container">
+        <canvas id="gameCanvas" width="600" height="800"></canvas>
+        <div id="ui-layer">
+            <div id="score">SCORE: 0</div>
+            <div id="message-box"></div>
+        </div>
+    </div>
+    <p>타이밍에 맞춰 SPACE 키를 누르세요!</p>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const messageBox = document.getElementById('message-box');
+
+        let score = 0;
+        let gameState = 'ready'; // ready, playing, gameOver
+
+        const ball = {
+            x: canvas.width / 2,
+            y: 150,
+            radius: 40,
+            vy: 0, // 수직 속도
+            gravity: 0.4,
+            img: new Image()
+        };
+        ball.img.src = 'https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg'; // 축구공 이미지
+
+        const timingCircle = {
+            x: canvas.width / 2,
+            y: canvas.height - 200,
+            perfectRadius: 50, // 퍼펙트 존
+            shrinkingRadius: 150, // 줄어드는 원
+            shrinkSpeed: 2,
+            isTiming: false
+        };
+
+        function drawBall() {
+            // 공이 떨어지는 애니메이션
+            if (gameState === 'playing' && !timingCircle.isTiming) {
+                ball.vy += ball.gravity;
+                ball.y += ball.vy;
+
+                // 바닥 근처에 도달하면 타이밍 시작
+                if (ball.y > canvas.height - 300) {
+                    ball.y = canvas.height - 300;
+                    ball.vy = 0;
+                    timingCircle.isTiming = true;
+                    timingCircle.shrinkingRadius = 150;
+                }
+            }
+            ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
+        }
+
+        function drawTimingCircle() {
+            if (gameState === 'playing' && timingCircle.isTiming) {
+                // 1. 퍼펙트 존 (고정된 원)
+                ctx.beginPath();
+                ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = 'gold';
+                ctx.lineWidth = 5;
+                ctx.stroke();
+                ctx.closePath();
+
+                // 2. 줄어드는 원
+                ctx.beginPath();
+                ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.closePath();
+
+                // 원 줄어들게 하기
+                timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
+
+                // 실패 판정 (원이 너무 작아졌을 때)
+                if (timingCircle.shrinkingRadius < timingCircle.perfectRadius - 10) {
+                    gameOver();
+                }
+            }
+        }
+
+        function trap() {
+            if (gameState !== 'playing' || !timingCircle.isTiming) return;
+
+            const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
+
+            // 성공 판정 (오차 범위 15px)
+            if (diff <= 15) {
+                score++;
+                scoreEl.textContent = `SCORE: ${score}`;
+                
+                // 성공 후 공 튀어오르는 효과
+                ball.y = canvas.height - 301;
+                ball.vy = -15; // 튀어오르는 힘
+                
+                // 타이밍 초기화
+                timingCircle.isTiming = false;
+                timingCircle.shrinkSpeed += 0.1; // 점점 더 어려워짐
+            } else {
+                gameOver();
+            }
+        }
+
+        function gameOver() {
+            gameState = 'gameOver';
+            messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 시작하려면 SPACE를 누르세요`;
+            messageBox.style.display = 'block';
+            timingCircle.isTiming = false;
+        }
+
+        function resetGame() {
+            score = 0;
+            scoreEl.textContent = `SCORE: ${score}`;
+            ball.y = 150;
+            ball.vy = 0;
+            timingCircle.shrinkSpeed = 2;
+            messageBox.style.display = 'none';
+            gameState = 'playing';
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 매 프레임 캔버스 지우기
+
+            if (gameState === 'playing') {
+                drawBall();
+                drawTimingCircle();
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 스페이스바 이벤트 리스너
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault(); // 스크롤 방지
+                if (gameState === 'playing') {
+                    trap();
+                } else if (gameState === 'gameOver') {
+                    resetGame();
+                } else if (gameState === 'ready') {
+                    gameState = 'playing';
+                    messageBox.style.display = 'none';
+                }
+            }
+        });
+        
+        // 초기 시작 메시지
+        messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
+        messageBox.style.display = 'block';
+        gameLoop();
+
+    </script>
+
+</body>
+</html>
