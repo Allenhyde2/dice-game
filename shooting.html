@@ -159,28 +159,14 @@
                 const h = keeper.height * proj.scale;
                 ctx.fillStyle = '#e67e22';
                 ctx.strokeStyle = '#d35400';
-                ctx.lineWidth = 2 * proj.scale;
-                const drawFinger = (x, y, width, height, angle) => {
-                    ctx.save();
-                    ctx.translate(x, y);
-                    ctx.rotate(angle);
+                ctx.lineWidth = 4 * proj.scale;
+                
+                keeper.hitboxParts.forEach(part => {
                     ctx.beginPath();
-                    ctx.roundRect(-width/2, -height, width, height, width/2);
+                    ctx.arc(proj.x + part.offsetX * proj.scale, proj.y + part.offsetY * proj.scale, part.radius * proj.scale, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.stroke();
-                    ctx.restore();
-                };
-                ctx.beginPath();
-                ctx.ellipse(proj.x, proj.y, w * 0.4, h * 0.45, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-                const fingerW = w * 0.18;
-                const fingerH = h * 0.5;
-                drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
-                drawFinger(proj.x - w * 0.1, proj.y - h * 0.4, fingerW, fingerH, -0.05);
-                drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
-                drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
-                drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
+                });
             };
 
             if (gameState === 'gameOver' && blockingKeeper) {
@@ -264,7 +250,7 @@
         }
 
         // ==========================================================
-        // ✨✨ 핵심 수정 부분 1: 골키퍼 움직임 범위 계산 수정
+        // ✨✨ 핵심 수정 부분: 골키퍼 움직임 범위 계산 수정
         // ==========================================================
         function update() {
             if (gameState === 'aiming' || gameState === 'powering') {
@@ -299,22 +285,25 @@
 
             if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
                 goalkeepers.forEach(keeper => {
-                    // 1. 조준점(target)이 움직일 수 있는 영역 정의
-                    const targetMinX = goal.x + target.size;
-                    const targetMaxX = goal.x + goal.width - target.size;
-                    const targetMinY = goal.y + target.size;
-                    const targetMaxY = goal.y + goal.height - target.size;
+                    // 1. 조준점이 이동 가능한 실제 영역 정의
+                    const targetArea = {
+                        minX: goal.x + target.size,
+                        maxX: goal.x + goal.width - target.size,
+                        minY: goal.y + target.size,
+                        maxY: goal.y + goal.height - target.size
+                    };
 
-                    // 2. 조준점 영역을 기준으로 골키퍼의 크기만큼 영역을 확장
-                    const keeperMinX = targetMinX - keeper.width;
-                    const keeperMaxX = targetMaxX;
-                    const keeperMinY = targetMinY - keeper.height;
-                    const keeperMaxY = targetMaxY;
+                    // 2. 골키퍼가 움직일 최종 경계 계산 (조준점 영역 + 골키퍼 크기만큼의 여백)
+                    // 골키퍼의 중심점이 조준점 영역을 커버하도록 범위를 설정
+                    const keeperMinX = targetArea.minX - (keeper.width / 2);
+                    const keeperMaxX = targetArea.maxX - (keeper.width / 2);
+                    const keeperMinY = targetArea.minY - (keeper.height / 2);
+                    const keeperMaxY = targetArea.maxY - (keeper.height / 2);
 
                     keeper.x += keeper.speedX * keeper.directionX;
                     keeper.y += keeper.speedY * keeper.directionY;
 
-                    // 3. 확장된 영역 내에서만 움직이도록 제한
+                    // 3. 계산된 경계 내에서만 움직이도록 제한
                     if (keeper.x < keeperMinX || keeper.x > keeperMaxX) {
                         keeper.directionX *= -1;
                         keeper.x = Math.max(keeperMinX, Math.min(keeper.x, keeperMaxX));
