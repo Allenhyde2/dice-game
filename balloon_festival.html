@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>다트 풍선 터뜨리기</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #2c1e38;
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            color: white;
+            text-align: center;
+        }
+        #game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        #game-container {
+            position: relative;
+            width: 900px;
+            height: 600px;
+            background: url('https://img.freepik.com/free-vector/circus-tent-background_1308-117563.jpg?w=1380') no-repeat center center;
+            background-size: cover;
+            border: 10px solid #8B4513;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #ui-container {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            font-size: 28px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 30px 50px;
+            border-radius: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <div id="game-container">
+            <canvas id="gameCanvas" width="900" height="600"></canvas>
+            <div id="message-box"></div>
+        </div>
+        <div id="ui-container">
+            <div id="score">SCORE: 0</div>
+            <div id="darts-left">DARTS LEFT: 10</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const dartsLeftEl = document.getElementById('darts-left');
+        const messageBox = document.getElementById('message-box');
+
+        let gameState = 'loading'; // loading, ready, powering, throwing, gameOver
+        let score = 0;
+        let dartsLeft = 15;
+        const balloons = [];
+        const particles = [];
+
+        const dart = {
+            x: canvas.width / 2,
+            y: canvas.height - 40,
+            width: 10,
+            height: 30,
+            vx: 3, // 좌우 이동 속도
+            vy: 0  // 상하 이동 속도 (파워에 따라 결정)
+        };
+
+        const powerGauge = {
+            value: 0,
+            direction: 1, // 1 for up, -1 for down
+            speed: 3
+        };
+
+        function setupBalloons() {
+            balloons.length = 0;
+            const rows = 6;
+            const cols = 15;
+            const balloonWidth = 40;
+            const balloonHeight = 50;
+            const padding = 20;
+            const offsetX = (canvas.width - (cols * (balloonWidth + padding)) + padding) / 2;
+            const offsetY = 50;
+            const colors = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#f78fb3', '#9c88ff'];
+            const pointValues = [10, 10, 10, 10, 20, 20, 20, 50, 50, 100]; // 점수 확률 조절
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    balloons.push({
+                        x: offsetX + c * (balloonWidth + padding),
+                        y: offsetY + r * (balloonHeight + padding),
+                        width: balloonWidth,
+                        height: balloonHeight,
+                        color: colors[r % colors.length],
+                        isPopped: false,
+                        points: pointValues[Math.floor(Math.random() * pointValues.length)]
+                    });
+                }
+            }
+        }
+
+        function drawBalloons() {
+            balloons.forEach(b => {
+                if (!b.isPopped) {
+                    ctx.beginPath();
+                    ctx.fillStyle = b.color;
+                    ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, b.height / 2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(b.x + b.width / 2, b.y + b.height);
+                    ctx.lineTo(b.x + b.width / 2 - 5, b.y + b.height + 5);
+                    ctx.lineTo(b.x + b.width / 2 + 5, b.y + b.height + 5);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            });
+        }
+
+        function drawDart() {
+            ctx.fillStyle = '#4b4b4b';
+            ctx.beginPath();
+            ctx.moveTo(dart.x, dart.y - dart.height);
+            ctx.lineTo(dart.x - dart.width / 2, dart.y);
+            ctx.lineTo(dart.x + dart.width / 2, dart.y);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = 'red';
+            ctx.fillRect(dart.x - dart.width, dart.y, dart.width * 2, 5);
+        }
+
+        function drawPowerGauge() {
+            if (gameState !== 'powering') return;
+
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(20, canvas.height - 150, 30, 120);
+
+            const gaugeHeight = (powerGauge.value / 100) * 110;
+            ctx.fillStyle = `hsl(${120 - powerGauge.value}, 100%, 50%)`; // Green to Red
+            ctx.fillRect(25, canvas.height - 35 - gaugeHeight, 20, gaugeHeight);
+        }
+
+        function drawParticles() {
+            particles.forEach((p, index) => {
+                p.alpha -= 0.02;
+                if (p.alpha <= 0) {
+                    particles.splice(index, 1);
+                }
+                p.x += p.vx;
+                p.y += p.vy;
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+                ctx.globalAlpha = 1.0;
+            });
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    size: Math.random() * 3 + 1,
+                    color: color,
+                    alpha: 1
+                });
+            }
+        }
+
+        function updateDart() {
+            if (gameState === 'ready') {
+                dart.x += dart.vx;
+                if (dart.x > canvas.width || dart.x < 0) {
+                    dart.vx *= -1;
+                }
+            } else if (gameState === 'powering') {
+                powerGauge.value += powerGauge.direction * powerGauge.speed;
+                if (powerGauge.value > 100 || powerGauge.value < 0) {
+                    powerGauge.direction *= -1;
+                    powerGauge.value = Math.max(0, Math.min(100, powerGauge.value));
+                }
+            } else if (gameState === 'throwing') {
+                dart.y -= dart.vy;
+
+                // Collision detection
+                for (const b of balloons) {
+                    if (!b.isPopped &&
+                        dart.x > b.x && dart.x < b.x + b.width &&
+                        dart.y - dart.height < b.y + b.height && dart.y - dart.height > b.y) {
+                        
+                        b.isPopped = true;
+                        score += b.points;
+                        scoreEl.textContent = `SCORE: ${score}`;
+                        createParticles(dart.x, dart.y - dart.height, b.color);
+                        resetDart();
+                        return;
+                    }
+                }
+
+                // Miss
+                if (dart.y < 0) {
+                    resetDart();
+                }
+            }
+        }
+
+        function resetDart() {
+            setTimeout(() => {
+                if (dartsLeft <= 0 || balloons.every(b => b.isPopped)) {
+                    gameOver();
+                    return;
+                }
+                dart.x = canvas.width / 2;
+                dart.y = canvas.height - 40;
+                dart.vy = 0;
+                gameState = 'ready';
+            }, 500);
+        }
+        
+        function startGame() {
+            messageBox.style.display = 'none';
+            score = 0;
+            dartsLeft = 15;
+            scoreEl.textContent = `SCORE: ${score}`;
+            dartsLeftEl.textContent = `DARTS LEFT: ${dartsLeft}`;
+            setupBalloons();
+            resetDart();
+            gameState = 'ready';
+        }
+
+        function gameOver() {
+            gameState = 'gameOver';
+            messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 하려면 Enter를 누르세요`;
+            messageBox.style.display = 'block';
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBalloons();
+            drawDart();
+            drawPowerGauge();
+            drawParticles();
+            updateDart();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && gameState === 'ready') {
+                e.preventDefault();
+                gameState = 'powering';
+                powerGauge.value = 0;
+                powerGauge.direction = 1;
+            } else if (e.code === 'Enter' && gameState === 'gameOver') {
+                startGame();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' && gameState === 'powering') {
+                e.preventDefault();
+                gameState = 'throwing';
+                dart.vy = 5 + (powerGauge.value / 100) * 20; // 최소 5, 최대 25의 속도
+                dartsLeft--;
+                dartsLeftEl.textContent = `DARTS LEFT: ${dartsLeft}`;
+            }
+        });
+
+        // --- Game Start ---
+        startGame();
+        gameLoop();
+    </script>
+</body>
+</html>
