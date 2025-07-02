@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임</title>
+    <title>축구 트래핑 타이밍 게임 (랜덤 모드)</title>
     <style>
         body {
             display: flex;
@@ -20,7 +20,6 @@
             position: relative;
             width: 600px;
             height: 800px;
-            /* 안정적인 배경 이미지 주소로 교체 */
             background: url('https://images.pexels.com/photos/114296/pexels-photo-114296.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1') no-repeat center center;
             background-size: cover;
             border: 5px solid #fff;
@@ -55,7 +54,7 @@
             background-color: rgba(0, 0, 0, 0.7);
             padding: 20px 40px;
             border-radius: 15px;
-            display: none; /* 초기에는 숨김 */
+            display: none;
         }
     </style>
 </head>
@@ -78,7 +77,7 @@
         const messageBox = document.getElementById('message-box');
 
         let score = 0;
-        let gameState = 'loading'; // loading, ready, playing, gameOver
+        let gameState = 'loading';
 
         const ball = {
             x: canvas.width / 2,
@@ -88,34 +87,35 @@
             gravity: 0.4,
             img: new Image()
         };
-        // 안정적인 축구공 이미지 주소
         ball.img.src = 'https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg';
 
         const timingCircle = {
             x: canvas.width / 2,
             y: canvas.height - 200,
-            perfectRadius: 50,
+            perfectRadius: 50, // 시작 값, 바로 랜덤으로 바뀜
             shrinkingRadius: 150,
             shrinkSpeed: 2,
             isTiming: false
         };
 
         // ==========================================================
-        // 여기가 핵심적인 수정 부분입니다!
-        // ball.img.onload는 이미지가 성공적으로 로딩된 후 실행됩니다.
+        // ✨ 새로 추가된 부분: 랜덤 숫자 생성 함수
         // ==========================================================
+        function getRandomRadius(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+
         ball.img.onload = function() {
             gameState = 'ready';
             messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
             messageBox.style.display = 'block';
-            gameLoop(); // 모든 준비가 끝나고 게임 루프를 시작합니다.
+            gameLoop();
         };
         ball.img.onerror = function() {
-            // 이미지를 불러오지 못했을 경우의 에러 처리
             messageBox.innerHTML = '게임 리소스를 불러오는 데 실패했습니다.<br>페이지를 새로고침 해주세요.';
             messageBox.style.display = 'block';
         }
-
 
         function drawBall() {
             if (gameState === 'playing' && !timingCircle.isTiming) {
@@ -129,7 +129,6 @@
                     timingCircle.shrinkingRadius = 150;
                 }
             }
-            // 공이 타이밍 존에 있을 때도 계속 그려주도록 수정
             if (gameState === 'playing' || gameState === 'gameOver') {
                  ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
             }
@@ -153,7 +152,7 @@
 
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
 
-                if (timingCircle.shrinkingRadius < timingCircle.perfectRadius - 15) { // 실패 판정 범위 약간 넓힘
+                if (timingCircle.shrinkingRadius < timingCircle.perfectRadius - 15) {
                     gameOver();
                 }
             }
@@ -171,6 +170,12 @@
                 ball.vy = -15;
                 timingCircle.isTiming = false;
                 timingCircle.shrinkSpeed += 0.1;
+
+                // ==========================================================
+                // ✨ 수정된 부분: 성공 시 다음 퍼펙트 존 크기를 랜덤으로 변경
+                // ==========================================================
+                timingCircle.perfectRadius = getRandomRadius(30, 70); // 30 ~ 70 픽셀 사이로 변경
+
             } else {
                 gameOver();
             }
@@ -191,6 +196,11 @@
             timingCircle.shrinkSpeed = 2;
             messageBox.style.display = 'none';
             gameState = 'playing';
+
+            // ==========================================================
+            // ✨ 수정된 부분: 게임 재시작 시 퍼펙트 존 크기를 랜덤으로 설정
+            // ==========================================================
+            timingCircle.perfectRadius = getRandomRadius(30, 70);
         }
 
         function gameLoop() {
@@ -209,15 +219,12 @@
                 e.preventDefault();
                 if (gameState === 'playing') {
                     trap();
-                } else if (gameState === 'gameOver') {
+                } else if (gameState === 'gameOver' || gameState === 'ready') {
+                    // ✨ 수정된 부분: 게임 시작과 재시작 로직을 resetGame으로 통합
                     resetGame();
-                } else if (gameState === 'ready') {
-                    gameState = 'playing';
-                    messageBox.style.display = 'none';
                 }
             }
         });
-
     </script>
 
 </body>
