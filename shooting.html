@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>3D 사커 챌린지</title>
+    <title>3D 사커 챌린지 - 스테이지 모드</title>
     <style>
         body {
             display: flex;
@@ -68,6 +68,12 @@
         let gameState = 'loading';
         const keys = {};
 
+        // ==========================================================
+        // ✨✨ 핵심 추가 부분 1: 스테이지 및 점수 변수 추가
+        // ==========================================================
+        let score = 0;
+        let stage = 1;
+
         const Z_GOAL = 150;
         const PERSPECTIVE = canvas.height * 0.8;
         const GRAVITY = 0.1;
@@ -81,12 +87,8 @@
             z: Z_GOAL, depth: 150
         };
         
-        const goalkeeper = {
-            x: 0, y: 0,
-            width: 100, height: 120,
-            speedX: 3, speedY: 2,
-            directionX: 1, directionY: 1
-        };
+        // ✨ 골키퍼를 여러 명 담을 배열로 변경
+        const goalkeepers = [];
 
         function project(x, y, z) {
             const scale = PERSPECTIVE / (PERSPECTIVE + z);
@@ -153,17 +155,48 @@
             ctx.closePath(); ctx.stroke();
         }
 
+        // ✨ 여러 명의 골키퍼를 그리는 함수로 변경
+        function drawGoalkeepers() {
+            if (gameState === 'result' || gameState === 'gameOver') return;
+            
+            goalkeepers.forEach(keeper => {
+                const proj = project(keeper.x, keeper.y, Z_GOAL);
+                const w = keeper.width * proj.scale;
+                const h = keeper.height * proj.scale;
+
+                ctx.fillStyle = '#e67e22';
+                ctx.strokeStyle = '#d35400';
+                ctx.lineWidth = 2 * proj.scale;
+
+                const drawFinger = (x, y, width, height, angle) => {
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(angle);
+                    ctx.beginPath();
+                    ctx.roundRect(-width/2, -height, width, height, width/2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                };
+                
+                const fingerW = w * 0.18;
+                const fingerH = h * 0.5;
+                drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
+                drawFinger(proj.x - w * 0.1, proj.y - h * 0.4, fingerW, fingerH, -0.05);
+                drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
+                drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
+                drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
+            });
+        }
+
         function drawBall() {
             const proj = project(ball.x, ball.y, ball.z);
             if (proj.scale <= 0) return;
-            
             const radius = ball.radius * proj.scale;
-            
             ctx.beginPath();
             ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.fillStyle = 'white';
             ctx.fill();
-
             const drawPolygon = (sides, centerX, centerY, size, rotation) => {
                 ctx.beginPath();
                 for (let i = 0; i < sides; i++) {
@@ -176,74 +209,25 @@
                 ctx.closePath();
                 ctx.fill();
             };
-            
             ctx.save();
             ctx.translate(proj.x, proj.y);
             ctx.rotate(ball.rotation);
-            
             const patchSize = radius * 0.4;
             const patchDist = radius * 0.7;
-
             ctx.fillStyle = 'black';
             drawPolygon(5, 0, 0, patchSize, 0);
-
             for (let i = 0; i < 5; i++) {
                 const angle = (Math.PI * 2 / 5) * i + Math.PI / 5;
                 const x = Math.cos(angle) * patchDist;
                 const y = Math.sin(angle) * patchDist;
                 drawPolygon(6, x, y, patchSize, 0);
             }
-            
             ctx.restore();
-
             ctx.beginPath();
             ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 2 * proj.scale;
             ctx.stroke();
-        }
-
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분 1: 빠져있던 골키퍼 그리기 함수 추가
-        // ==========================================================
-        function drawGoalkeeper() {
-            if (gameState === 'result') return;
-            const proj = project(goalkeeper.x, goalkeeper.y, Z_GOAL);
-            const w = goalkeeper.width * proj.scale;
-            const h = goalkeeper.height * proj.scale;
-
-            ctx.fillStyle = '#e67e22';
-            ctx.strokeStyle = '#d35400';
-            ctx.lineWidth = 2 * proj.scale;
-
-            // 손바닥
-            ctx.beginPath();
-            ctx.ellipse(proj.x, proj.y, w * 0.4, h * 0.45, 0, Math.PI, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-
-            // 손가락
-            const drawFinger = (x, y, width, height, angle) => {
-                ctx.save();
-                ctx.translate(x, y);
-                ctx.rotate(angle);
-                ctx.beginPath();
-                // A rounded rectangle for a finger shape
-                ctx.roundRect(-width/2, -height, width, height, width/2);
-                ctx.fill();
-                ctx.stroke();
-                ctx.restore();
-            };
-            
-            const fingerW = w * 0.18;
-            const fingerH = h * 0.5;
-            drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
-            drawFinger(proj.x - w * 0.1, proj.y - h * 0.4, fingerW, fingerH, -0.05);
-            drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
-            drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
-            
-            // 엄지
-            drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
         }
 
         function drawTarget() {
@@ -260,6 +244,17 @@
              ctx.stroke();
         }
         
+        // ==========================================================
+        // ✨✨ 핵심 추가 부분 2: 스테이지/점수 UI 그리기 함수
+        // ==========================================================
+        function drawUI() {
+            ctx.fillStyle = 'white';
+            ctx.font = '24px "Pretendard", sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`STAGE: ${stage}`, 20, 40);
+            ctx.fillText(`SCORE: ${score}`, 20, 70);
+        }
+
         function update() {
             if (gameState === 'aiming' || gameState === 'powering') {
                 if (keys['ArrowLeft']) target.x -= 5;
@@ -291,63 +286,66 @@
                 }
             }
 
-            if (gameState !== 'result') {
-                goalkeeper.x += goalkeeper.speedX * goalkeeper.directionX;
-                goalkeeper.y += goalkeeper.speedY * goalkeeper.directionY;
-                if (goalkeeper.x < goal.x || goalkeeper.x + goalkeeper.width > goal.x + goal.width) {
-                    goalkeeper.directionX *= -1;
-                }
-                if (goalkeeper.y < goal.y || goalkeeper.y + goalkeeper.height > goal.y + goal.height) {
-                    goalkeeper.directionY *= -1;
-                }
+            // ✨ 여러 명의 골키퍼 위치 업데이트
+            if (gameState !== 'result' && gameState !== 'gameOver') {
+                goalkeepers.forEach(keeper => {
+                    keeper.x += keeper.speedX * keeper.directionX;
+                    keeper.y += keeper.speedY * keeper.directionY;
+
+                    if (keeper.x < goal.x || keeper.x + keeper.width > goal.x + goal.width) {
+                        keeper.directionX *= -1;
+                    }
+                    if (keeper.y < goal.y || keeper.y + keeper.height > goal.y + goal.height) {
+                        keeper.directionY *= -1;
+                    }
+                });
             }
         }
         
+        // ==========================================================
+        // ✨✨ 핵심 추가 부분 3: 게임오버 및 스테이지 진행 로직
+        // ==========================================================
         function checkGoal() {
             gameState = 'result';
             let message = '';
-        
-            // ==========================================================
-            // ✨✨ 핵심 수정 부분: 충돌 판정 로직 개선
-            // ==========================================================
-        
-            // 1. 골키퍼 장갑의 실제 판정 영역(Hitbox)을 시각적인 모양에 맞게 약간 조정
-            const gloveHitbox = {
-                x: goalkeeper.x + 10,
-                y: goalkeeper.y + 10,
-                width: goalkeeper.width - 20,
-                height: goalkeeper.height - 20
-            };
-        
-            // 2. 공(원)과 장갑(사각형)의 가장 가까운 지점을 찾음
-            const closestX = Math.max(gloveHitbox.x, Math.min(ball.x, gloveHitbox.x + gloveHitbox.width));
-            const closestY = Math.max(gloveHitbox.y, Math.min(ball.y, gloveHitbox.y + gloveHitbox.height));
-        
-            // 3. 공의 중심과 가장 가까운 지점 사이의 거리를 계산
-            const distanceX = ball.x - closestX;
-            const distanceY = ball.y - closestY;
-            const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-        
-            // 4. 거리가 공의 반지름보다 작으면 충돌로 판정
-            const isSaved = distanceSquared < (ball.radius * ball.radius);
-        
+            let isSaved = false;
+
+            // 모든 골키퍼와 충돌 검사
+            goalkeepers.forEach(keeper => {
+                const closestX = Math.max(keeper.x, Math.min(ball.x, keeper.x + keeper.width));
+                const closestY = Math.max(keeper.y, Math.min(ball.y, keeper.y + keeper.height));
+                const distanceX = ball.x - closestX;
+                const distanceY = ball.y - closestY;
+                const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+                if (distanceSquared < (ball.radius * ball.radius)) {
+                    isSaved = true;
+                }
+            });
+
             if (isSaved) {
+                gameState = 'gameOver'; // 게임오버 상태로 변경
                 message = 'NO GOAL!';
                 messageBox.style.color = '#ff4757';
+                messageBox.innerHTML = `GAME OVER<div id="retry-message">FINAL SCORE: ${score}<br>RETRY? (Enter)</div>`;
             } else if (ball.x > goal.x && ball.x < goal.x + goal.width &&
                        ball.y > goal.y && ball.y < goal.y + goal.height) {
                 message = 'GOAL!';
                 messageBox.style.color = 'gold';
+                messageBox.innerHTML = `${message}<div id="retry-message">NEXT STAGE!</div>`;
+                score += 100;
+                stage += 1;
+                setTimeout(setupStage, 2000); // 2초 후 다음 스테이지 준비
             } else {
                 message = 'MISS';
                 messageBox.style.color = 'white';
+                messageBox.innerHTML = `${message}<div id="retry-message">RETRY? (Enter)</div>`;
             }
-        
-            messageBox.innerHTML = `${message}<div id="retry-message">RETRY? (Enter)</div>`;
+
             messageBox.style.display = 'block';
         }
 
-        function startGame() {
+        // 스테이지를 준비하는 함수
+        function setupStage() {
             messageBox.style.display = 'none';
             gameState = 'aiming';
             ball.x = canvas.width / 2;
@@ -357,8 +355,26 @@
             target.x = canvas.width / 2;
             target.y = goal.y + goal.height / 2;
             
-            goalkeeper.x = goal.x + goal.width / 2 - goalkeeper.width / 2;
-            goalkeeper.y = goal.y + goal.height / 2 - goalkeeper.height / 2;
+            // 현재 스테이지 수만큼 골키퍼 생성
+            goalkeepers.length = 0;
+            for (let i = 0; i < stage; i++) {
+                goalkeepers.push({
+                    x: goal.x + Math.random() * (goal.width - 100),
+                    y: goal.y + Math.random() * (goal.height - 120),
+                    width: 100, height: 120,
+                    speedX: 2 + Math.random() * 2,
+                    speedY: 1 + Math.random() * 2,
+                    directionX: Math.random() > 0.5 ? 1 : -1,
+                    directionY: Math.random() > 0.5 ? 1 : -1
+                });
+            }
+        }
+
+        // 게임을 완전히 새로 시작하는 함수
+        function startGame() {
+            score = 0;
+            stage = 1;
+            setupStage();
         }
 
         window.addEventListener('keydown', e => {
@@ -371,7 +387,12 @@
                     powerGauge.direction = 1;
                 }
             } else if (e.code === 'Enter' && (gameState === 'result' || gameState === 'gameOver')) {
-                startGame();
+                // MISS일 경우 현재 스테이지 재시도, 게임오버일 경우 완전 새로 시작
+                if (gameState === 'gameOver') {
+                    startGame();
+                } else {
+                    setupStage();
+                }
             }
         });
 
@@ -407,15 +428,16 @@
             update();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawField();
-            drawGoalkeeper();
             drawGoalPost();
+            drawGoalkeepers();
             drawBall();
             drawTarget();
             drawPowerGauge();
+            drawUI(); // ✨ UI 그리기
             requestAnimationFrame(gameLoop);
         }
         
-        startGame();
+        startGame(); // ✨ 게임 시작
         gameLoop();
     </script>
 </body>
