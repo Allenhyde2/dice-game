@@ -69,14 +69,24 @@
         const keys = {};
 
         const Z_GOAL = 150;
-        // ✨ 원근감 효과를 강화하기 위해 값 수정
         const PERSPECTIVE = canvas.height * 0.8;
         const GRAVITY = 0.1;
 
-        const ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, radius: 30 };
+        const ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, radius: 30, rotation: 0 };
         const target = { x: 0, y: 0, size: 25 };
         const powerGauge = { value: 0, direction: 1, speed: 2 };
-        const goal = { x: 200, y: 150, z: Z_GOAL, width: 500, height: 250, depth: 100 };
+        
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 1: 골대 크기 및 위치 조정
+        // ==========================================================
+        const goal = {
+            width: 750,     // 500 * 1.5
+            height: 375,    // 250 * 1.5
+            x: (900 - 750) / 2, // 중앙 정렬
+            y: 50,          // 위로 이동 (기존 150)
+            z: Z_GOAL,
+            depth: 150      // 100 * 1.5
+        };
 
         function project(x, y, z) {
             const scale = PERSPECTIVE / (PERSPECTIVE + z);
@@ -103,6 +113,9 @@
             ctx.stroke();
         }
 
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 2: 골대 그물망 그리기 로직 개선
+        // ==========================================================
         function drawGoalPost() {
             const p1 = project(goal.x, goal.y, goal.z);
             const p2 = project(goal.x + goal.width, goal.y, goal.z);
@@ -113,6 +126,31 @@
             const p7 = project(goal.x + goal.width, goal.y + goal.height, goal.z + goal.depth);
             const p8 = project(goal.x, goal.y + goal.height, goal.z + goal.depth);
 
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 2 * p1.scale;
+            const netDensity = 15;
+
+            // 그물망 그리기 (뒷면, 윗면, 옆면)
+            const drawNet = (from1, to1, from2, to2) => {
+                for (let i = 1; i < netDensity; i++) {
+                    const ratio = i / netDensity;
+                    const x1 = from1.x + (to1.x - from1.x) * ratio;
+                    const y1 = from1.y + (to1.y - from1.y) * ratio;
+                    const x2 = from2.x + (to2.x - from2.x) * ratio;
+                    const y2 = from2.y + (to2.y - from2.y) * ratio;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                }
+            };
+            drawNet(p5, p6, p8, p7); // 뒷면 세로
+            drawNet(p5, p8, p6, p7); // 뒷면 가로
+            drawNet(p1, p2, p5, p6); // 윗면
+            drawNet(p1, p4, p5, p8); // 왼쪽 옆면
+            drawNet(p2, p3, p6, p7); // 오른쪽 옆면
+
+            // 골대 프레임 그리기
             ctx.strokeStyle = '#DDDDDD';
             ctx.lineWidth = 15 * p1.scale;
             ctx.beginPath();
@@ -127,18 +165,46 @@
             ctx.stroke();
         }
 
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 3: 축구공 모양 그리기
+        // ==========================================================
         function drawBall() {
             const proj = project(ball.x, ball.y, ball.z);
             if (proj.scale <= 0) return;
+
+            const radius = ball.radius * proj.scale;
             
+            // 흰색 공 배경
             ctx.beginPath();
+            ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.fillStyle = 'white';
-            ctx.arc(proj.x, proj.y, ball.radius * proj.scale, 0, Math.PI * 2);
             ctx.fill();
+
+            // 검은색 오각형 무늬
+            ctx.fillStyle = 'black';
+            const angleStep = Math.PI * 2 / 5;
+            
+            const drawPentagon = (offsetX, offsetY, size, rotation) => {
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const angle = angleStep * i + rotation;
+                    const x = proj.x + offsetX + Math.cos(angle) * size;
+                    const y = proj.y + offsetY + Math.sin(angle) * size;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+            };
+            
+            const pentagonSize = radius * 0.4;
+            drawPentagon(0, 0, pentagonSize, ball.rotation);
+            
+            // 테두리
             ctx.beginPath();
+            ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 2 * proj.scale;
-            ctx.arc(proj.x, proj.y, ball.radius * proj.scale, 0, Math.PI * 2);
             ctx.stroke();
         }
 
@@ -158,18 +224,14 @@
         
         function update() {
             if (gameState === 'aiming') {
-                // ✨ 좌우 조준
                 if (keys['ArrowLeft']) target.x -= 5;
                 if (keys['ArrowRight']) target.x += 5;
-                // ✨ 상하 조준 추가
                 if (keys['ArrowUp']) target.y -= 5;
                 if (keys['ArrowDown']) target.y += 5;
 
-                // 조준점이 골대 밖으로 나가지 않도록 제한
                 const minX = goal.x + target.size;
                 const maxX = goal.x + goal.width - target.size;
                 target.x = Math.max(minX, Math.min(maxX, target.x));
-                
                 const minY = goal.y + target.size;
                 const maxY = goal.y + goal.height - target.size;
                 target.y = Math.max(minY, Math.min(maxY, target.y));
@@ -183,6 +245,7 @@
             } else if (gameState === 'flying') {
                 ball.vy += GRAVITY; ball.x += ball.vx;
                 ball.y += ball.vy; ball.z += ball.vz;
+                ball.rotation += 0.1; // 공 회전
                 if (ball.z >= Z_GOAL) {
                     ball.z = Z_GOAL;
                     checkGoal();
@@ -209,8 +272,9 @@
             ball.x = canvas.width / 2;
             ball.y = canvas.height - 50;
             ball.z = 0;
+            ball.rotation = 0;
             target.x = canvas.width / 2;
-            target.y = goal.y + goal.height / 2; // 조준점 y위치 초기화
+            target.y = goal.y + goal.height / 2;
         }
 
         window.addEventListener('keydown', e => {
@@ -231,10 +295,8 @@
                 e.preventDefault();
                 gameState = 'flying';
                 
-                // ✨ 파워에 따라 비행 시간(속도)이 결정되도록 변경
-                const flightTime = 80 - (powerGauge.value / 100) * 50; // 30~80 프레임
+                const flightTime = 80 - (powerGauge.value / 100) * 50;
                 
-                // 조준된 위치(target.x, target.y)에 도달하기 위한 초기 속도 계산
                 const vy_initial = (target.y - ball.y - 0.5 * GRAVITY * flightTime * flightTime) / flightTime;
                 const vx_initial = (target.x - ball.x) / flightTime;
                 const vz_initial = Z_GOAL / flightTime;
