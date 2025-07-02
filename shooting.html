@@ -57,7 +57,7 @@
             <canvas id="gameCanvas" width="900" height="600"></canvas>
             <div id="message-box"></div>
         </div>
-        <p>방향키로 조준, 스페이스바로 파워 조절!</p>
+        <p>방향키로 조준, 스페이스바로 파워(속도) 조절!</p>
     </div>
 
     <script>
@@ -65,17 +65,16 @@
         const ctx = canvas.getContext('2d');
         const messageBox = document.getElementById('message-box');
 
-        let gameState = 'loading'; // aiming, powering, flying, result
+        let gameState = 'loading';
         const keys = {};
 
-        // 3D 공간 및 게임 객체 설정
-        const Z_GOAL = 150; // 골대의 깊이 위치
-        const PERSPECTIVE = canvas.height;
+        const Z_GOAL = 150;
+        // ✨ 원근감 효과를 강화하기 위해 값 수정
+        const PERSPECTIVE = canvas.height * 0.8;
         const GRAVITY = 0.1;
-        const FLIGHT_TIME = 45; // 공 비행 시간(프레임)
 
         const ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, radius: 30 };
-        const target = { x: canvas.width / 2, y: 0, size: 25 };
+        const target = { x: 0, y: 0, size: 25 };
         const powerGauge = { value: 0, direction: 1, speed: 2 };
         const goal = { x: 200, y: 150, z: Z_GOAL, width: 500, height: 250, depth: 100 };
 
@@ -94,7 +93,6 @@
             grad.addColorStop(1, '#276827');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.lineWidth = 5;
             ctx.beginPath();
@@ -110,7 +108,6 @@
             const p2 = project(goal.x + goal.width, goal.y, goal.z);
             const p3 = project(goal.x + goal.width, goal.y + goal.height, goal.z);
             const p4 = project(goal.x, goal.y + goal.height, goal.z);
-
             const p5 = project(goal.x, goal.y, goal.z + goal.depth);
             const p6 = project(goal.x + goal.width, goal.y, goal.z + goal.depth);
             const p7 = project(goal.x + goal.width, goal.y + goal.height, goal.z + goal.depth);
@@ -118,19 +115,14 @@
 
             ctx.strokeStyle = '#DDDDDD';
             ctx.lineWidth = 15 * p1.scale;
-
-            // 뒷면 프레임 및 옆면 연결부
             ctx.beginPath();
             ctx.moveTo(p5.x, p5.y); ctx.lineTo(p6.x, p6.y); ctx.lineTo(p2.x, p2.y);
             ctx.moveTo(p6.x, p6.y); ctx.lineTo(p7.x, p7.y); ctx.lineTo(p3.x, p3.y);
             ctx.moveTo(p7.x, p7.y); ctx.lineTo(p8.x, p8.y); ctx.lineTo(p4.x, p4.y);
             ctx.moveTo(p8.x, p8.y); ctx.lineTo(p5.x, p5.y); ctx.lineTo(p1.x, p1.y);
             ctx.stroke();
-            
-            // 앞면 프레임
             ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-            ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+            ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
             ctx.closePath();
             ctx.stroke();
         }
@@ -143,7 +135,6 @@
             ctx.fillStyle = 'white';
             ctx.arc(proj.x, proj.y, ball.radius * proj.scale, 0, Math.PI * 2);
             ctx.fill();
-
             ctx.beginPath();
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 2 * proj.scale;
@@ -167,11 +158,22 @@
         
         function update() {
             if (gameState === 'aiming') {
-                if (keys['ArrowLeft']) target.x -= 8;
-                if (keys['ArrowRight']) target.x += 8;
+                // ✨ 좌우 조준
+                if (keys['ArrowLeft']) target.x -= 5;
+                if (keys['ArrowRight']) target.x += 5;
+                // ✨ 상하 조준 추가
+                if (keys['ArrowUp']) target.y -= 5;
+                if (keys['ArrowDown']) target.y += 5;
+
+                // 조준점이 골대 밖으로 나가지 않도록 제한
                 const minX = goal.x + target.size;
                 const maxX = goal.x + goal.width - target.size;
                 target.x = Math.max(minX, Math.min(maxX, target.x));
+                
+                const minY = goal.y + target.size;
+                const maxY = goal.y + goal.height - target.size;
+                target.y = Math.max(minY, Math.min(maxY, target.y));
+
             } else if (gameState === 'powering') {
                 powerGauge.value += powerGauge.direction * powerGauge.speed;
                 if (powerGauge.value > 100 || powerGauge.value < 0) {
@@ -181,7 +183,6 @@
             } else if (gameState === 'flying') {
                 ball.vy += GRAVITY; ball.x += ball.vx;
                 ball.y += ball.vy; ball.z += ball.vz;
-
                 if (ball.z >= Z_GOAL) {
                     ball.z = Z_GOAL;
                     checkGoal();
@@ -209,7 +210,7 @@
             ball.y = canvas.height - 50;
             ball.z = 0;
             target.x = canvas.width / 2;
-            target.y = goal.y + goal.height / 2;
+            target.y = goal.y + goal.height / 2; // 조준점 y위치 초기화
         }
 
         window.addEventListener('keydown', e => {
@@ -230,11 +231,13 @@
                 e.preventDefault();
                 gameState = 'flying';
                 
-                const targetY = goal.y + goal.height - (powerGauge.value / 100) * (goal.height * 0.8);
+                // ✨ 파워에 따라 비행 시간(속도)이 결정되도록 변경
+                const flightTime = 80 - (powerGauge.value / 100) * 50; // 30~80 프레임
                 
-                const vy_initial = (targetY - ball.y - 0.5 * GRAVITY * FLIGHT_TIME * FLIGHT_TIME) / FLIGHT_TIME;
-                const vx_initial = (target.x - ball.x) / FLIGHT_TIME;
-                const vz_initial = Z_GOAL / FLIGHT_TIME;
+                // 조준된 위치(target.x, target.y)에 도달하기 위한 초기 속도 계산
+                const vy_initial = (target.y - ball.y - 0.5 * GRAVITY * flightTime * flightTime) / flightTime;
+                const vx_initial = (target.x - ball.x) / flightTime;
+                const vz_initial = Z_GOAL / flightTime;
 
                 ball.vx = vx_initial;
                 ball.vy = vy_initial;
@@ -244,7 +247,7 @@
 
         function drawPowerGauge() {
             if (gameState !== 'powering') return;
-            const barX = canvas.width / 2 - 150, barY = canvas.height - 60;
+            const barX = canvas.width / 2 - 150, barY = canvas.height - 40;
             ctx.fillStyle = 'rgba(0,0,0,0.5)';
             ctx.fillRect(barX, barY, 300, 30);
             const gaugeWidth = (powerGauge.value / 100) * 300;
@@ -255,13 +258,11 @@
         function gameLoop() {
             update();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
             drawField();
             drawGoalPost();
             drawBall();
             drawTarget();
             drawPowerGauge();
-            
             requestAnimationFrame(gameLoop);
         }
         
