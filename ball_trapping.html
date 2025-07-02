@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (프로 모드)</title>
+    <title>축구 트래핑 타이밍 게임 (컬러 모드)</title>
     <style>
         body {
             display: flex;
@@ -122,10 +122,6 @@
                     ball.vy += ball.gravity;
                     ball.y += ball.vy;
                     
-                    // ==========================================================
-                    // ✨✨ 핵심 수정 부분 ✨✨
-                    // 공이 아래로 떨어질 때(vy > 0)만 타이밍 시퀀스가 시작되도록 조건을 추가합니다.
-                    // ==========================================================
                     if (ball.y >= canvas.height - 400 && ball.vy > 0) {
                         timingCircle.isTiming = true;
                         timingCircle.shrinkingRadius = 150;
@@ -143,28 +139,45 @@
         
         function drawTimingCircle() {
             if (gameState === 'playing' && timingCircle.isTiming) {
+                // 1. 타겟 존
                 timingCircle.pulseAlpha += timingCircle.pulseSpeed;
                 if (timingCircle.pulseAlpha > 1 || timingCircle.pulseAlpha < 0) {
                     timingCircle.pulseSpeed *= -1;
                 }
-
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = `rgba(255, 215, 0, ${0.3 + timingCircle.pulseAlpha * 0.4})`;
                 ctx.lineWidth = 15;
                 ctx.stroke();
-
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
+                // ==========================================================
+                // ✨✨ 핵심 수정 부분: 줄어드는 원의 색상을 동적으로 변경
+                // ==========================================================
+                const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
+                const maxDiffForColor = 50; // 색상 변화가 일어나는 최대 오차 범위
+                
+                // 오차(diff)에 따라 0(Perfect) ~ 1(Bad) 사이의 비율 계산
+                let ratio = Math.min(1, diff / maxDiffForColor); 
+                
+                // 비율에 따라 빨간색(255,0,0)과 초록색(0,255,0) 사이를 보간
+                let red = Math.floor(255 * ratio);
+                let green = Math.floor(255 * (1 - ratio));
+                const dynamicColor = `rgb(${red}, ${green}, 0)`;
+
+                // 2. 줄어드는 원 (계산된 색상 적용)
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                ctx.lineWidth = 3;
+                ctx.strokeStyle = dynamicColor; // 동적 색상 적용
+                ctx.lineWidth = 5; // 눈에 잘 띄게 두께 조절
+                ctx.shadowBlur = 10; // 네온 효과
+                ctx.shadowColor = dynamicColor; // 네온 효과 색상
                 ctx.stroke();
+                ctx.shadowBlur = 0; // 다른 그림에 영향 없도록 초기화
 
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
 
@@ -210,8 +223,7 @@
             judgment.text = judgmentText;
             judgment.alpha = 1;
 
-            // 성공 시 공이 위로 튀어오르는 효과 준비
-            ball.vy = -18; // 튀어오르는 힘
+            ball.vy = -18;
             timingCircle.isTiming = false;
             timingCircle.shrinkSpeed += 0.1;
             timingCircle.perfectRadius = getRandomRadius(35, 65);
