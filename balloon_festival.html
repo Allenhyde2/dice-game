@@ -145,38 +145,30 @@
             // 그물망 그리기
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
             ctx.lineWidth = 2 * p1.scale;
-            const netDensity = 20;
+            const verticalLines = 15;
+            const horizontalLines = 8;
 
-            // 뒷면 그물
-            for (let i = 0; i <= netDensity; i++) {
-                const ratio = i / netDensity;
-                // 대각선 \
+            // 뒷면 그물 (바둑판 모양)
+            for (let i = 1; i < verticalLines; i++) {
+                const ratio = i / verticalLines;
+                const topX = p5.x + (p6.x - p5.x) * ratio;
+                const topY = p5.y + (p6.y - p5.y) * ratio;
+                const bottomX = p8.x + (p7.x - p8.x) * ratio;
+                const bottomY = p8.y + (p7.y - p8.y) * ratio;
                 ctx.beginPath();
-                ctx.moveTo(p5.x + (p6.x - p5.x) * ratio, p5.y);
-                ctx.lineTo(p8.x, p8.y + (p7.y - p8.y) * ratio);
-                ctx.stroke();
-                // 대각선 /
-                ctx.beginPath();
-                ctx.moveTo(p6.x - (p6.x - p5.x) * ratio, p6.y);
-                ctx.lineTo(p7.x, p7.y - (p7.y - p8.y) * ratio);
+                ctx.moveTo(topX, topY);
+                ctx.lineTo(bottomX, bottomY);
                 ctx.stroke();
             }
-
-            // 윗면 그물
-            for (let i = 1; i < netDensity; i++) {
-                const ratio = i / netDensity;
+            for (let i = 1; i < horizontalLines; i++) {
+                const ratio = i / horizontalLines;
+                const leftX = p5.x + (p8.x - p5.x) * ratio;
+                const leftY = p5.y + (p8.y - p5.y) * ratio;
+                const rightX = p6.x + (p7.x - p6.x) * ratio;
+                const rightY = p6.y + (p7.y - p6.y) * ratio;
                 ctx.beginPath();
-                ctx.moveTo(p1.x + (p2.x - p1.x) * ratio, p1.y);
-                ctx.lineTo(p5.x + (p6.x - p5.x) * ratio, p5.y);
-                ctx.stroke();
-            }
-            
-            // 왼쪽 옆면 그물
-            for (let i = 1; i < netDensity; i++) {
-                const ratio = i / netDensity;
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y + (p4.y - p1.y) * ratio);
-                ctx.lineTo(p5.x, p5.y + (p8.y - p5.y) * ratio);
+                ctx.moveTo(leftX, leftY);
+                ctx.lineTo(rightX, rightY);
                 ctx.stroke();
             }
 
