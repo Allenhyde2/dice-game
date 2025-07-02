@@ -65,14 +65,7 @@
         let score = 0;
         const balloons = [];
         const particles = [];
-        // ✨ 점수 쪽지 상태 객체
-        let scoreNote = {
-            text: '',
-            x: 0, y: 0,
-            scale: 0,
-            alpha: 0,
-            isShowing: false
-        };
+        let scoreNote = { text: '', x: 0, y: 0, scale: 0, alpha: 0, isShowing: false };
 
         const Z_WALL = 100;
         const PERSPECTIVE = canvas.height * 0.8;
@@ -95,10 +88,17 @@
 
         function setupBalloons() {
             balloons.length = 0;
-            const rows = 4, cols = 8, balloonWidth = 70, balloonHeight = 90;
-            const paddingX = 35, paddingY = 20;
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분: 풍선 크기와 간격 조정
+            // ==========================================================
+            const rows = 4, cols = 8;
+            const balloonWidth = 90;  // 풍선 너비 증가
+            const balloonHeight = 115; // 풍선 높이 증가
+            const paddingX = 5;      // 좌우 간격 감소
+            const paddingY = 5;      // 상하 간격 감소
+
             const startX = (canvas.width - (cols * (balloonWidth + paddingX)) + paddingX) / 2;
-            const startY = 80;
+            const startY = 65; // 시작 위치 미세 조정
             const pointValues = [10, 10, 20, 20, 50, 50, 100, 200, 500];
 
             for (let r = 0; r < rows; r++) {
@@ -154,7 +154,8 @@
             balloons.forEach(b => {
                 const proj = project(b.baseX + wall.x, b.baseY, b.z);
                 if (!b.isPopped) {
-                    const w = b.width * proj.scale, h = b.height * proj.scale;
+                    const w = b.width * proj.scale;
+                    const h = b.height * proj.scale;
                     ctx.beginPath();
                     ctx.fillStyle = b.color;
                     ctx.ellipse(proj.x + w / 2, proj.y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
@@ -192,31 +193,25 @@
             return (targetY - dart.y - 0.5 * GRAVITY * FLIGHT_TIME * FLIGHT_TIME) / FLIGHT_TIME;
         }
         
-        // ✨ 점수 쪽지를 그리는 함수
         function drawScoreNote() {
             if (!scoreNote.isShowing) return;
-
             if (scoreNote.scale < 1) scoreNote.scale += 0.05;
             if (scoreNote.alpha < 1) scoreNote.alpha += 0.05;
-
             ctx.save();
             ctx.translate(scoreNote.x, scoreNote.y);
             ctx.scale(scoreNote.scale, scoreNote.scale);
             ctx.rotate(-0.1);
             ctx.globalAlpha = scoreNote.alpha;
-            
             ctx.fillStyle = '#ffffe0';
             ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
             ctx.shadowBlur = 10;
             ctx.fillRect(-50, -35, 100, 70);
             ctx.shadowBlur = 0;
-
             ctx.fillStyle = '#34495e';
             ctx.font = 'bold 32px "Gothic A1", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(scoreNote.text, 0, 0);
-
             ctx.restore();
         }
         
@@ -251,8 +246,6 @@
                     score = b.points;
                     const proj = project(currentBalloonX, b.baseY, b.z);
                     createParticles(proj.x + (b.width/2*proj.scale), proj.y + (b.height/2*proj.scale), b.color);
-                    
-                    // ✨ 충돌 시 점수 쪽지 상태를 설정
                     scoreNote = {
                         text: `${score} 점`,
                         x: proj.x + (b.width / 2 * proj.scale),
@@ -265,6 +258,10 @@
                     break;
                 }
             }
+            // MISS가 발생하지 않으므로 MISS 처리는 사실상 불필요하지만, 만약을 위해 남겨둠
+            if (!hit) {
+                score = 0;
+            }
             setTimeout(gameOver, 1500);
         }
 
@@ -274,7 +271,7 @@
         function startGame() {
             messageBox.style.display = 'none';
             score = 0;
-            scoreNote.isShowing = false; // ✨ 게임 시작 시 쪽지 숨기기
+            scoreNote.isShowing = false;
             setupBalloons();
             gameState = 'ready';
             dart.x = canvas.width / 2;
@@ -330,13 +327,12 @@
             drawTent();
             drawWall();
             drawBalloons();
-            
             const dartProj = project(dart.x, dart.y, dart.z);
             if (gameState !== 'ready') {
                  drawDart(dartProj.x, dartProj.y, dartProj.scale);
             }
             drawParticles();
-            drawScoreNote(); // ✨ 점수 쪽지 그리기 함수 호출
+            drawScoreNote();
             drawPowerGauge();
             requestAnimationFrame(gameLoop);
         }
