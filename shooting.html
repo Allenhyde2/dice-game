@@ -70,6 +70,7 @@
 
         let score = 0;
         let stage = 1;
+        let blockingKeeper = null; // ✨ 공을 막은 골키퍼를 저장할 변수
 
         const Z_GOAL = 150;
         const PERSPECTIVE = canvas.height * 0.8;
@@ -152,33 +153,27 @@
         }
 
         function drawGoalkeepers() {
-            if (gameState === 'result' || gameState === 'gameOver' || gameState === 'nextStage') return;
-            
-            const drawFinger = (x, y, width, height, angle) => {
-                ctx.save();
-                ctx.translate(x, y);
-                ctx.rotate(angle);
-                ctx.beginPath();
-                ctx.roundRect(-width/2, -height, width, height, width/2);
-                ctx.fill();
-                ctx.stroke();
-                ctx.restore();
-            };
-
-            goalkeepers.forEach(keeper => {
+            const drawGlove = (keeper) => {
                 const proj = project(keeper.x, keeper.y, Z_GOAL);
                 const w = keeper.width * proj.scale;
                 const h = keeper.height * proj.scale;
-
                 ctx.fillStyle = '#e67e22';
                 ctx.strokeStyle = '#d35400';
                 ctx.lineWidth = 2 * proj.scale;
-                
+                const drawFinger = (x, y, width, height, angle) => {
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(angle);
+                    ctx.beginPath();
+                    ctx.roundRect(-width/2, -height, width, height, width/2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                };
                 ctx.beginPath();
                 ctx.ellipse(proj.x, proj.y, w * 0.4, h * 0.45, 0, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
-
                 const fingerW = w * 0.18;
                 const fingerH = h * 0.5;
                 drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
@@ -186,52 +181,52 @@
                 drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
                 drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
                 drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
-            });
+            };
+
+            // ✨ 게임오버 시에는 공을 막은 골키퍼만, 그 외에는 모든 골키퍼를 그림
+            if (gameState === 'gameOver' && blockingKeeper) {
+                drawGlove(blockingKeeper);
+            } else if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
+                goalkeepers.forEach(drawGlove);
+            }
         }
 
         function drawBall() {
+            // ✨ 게임오버 시에도 공이 보이도록 조건 완화
+            if (gameState === 'result' && gameState === 'nextStage') return;
+
             const proj = project(ball.x, ball.y, ball.z);
             if (proj.scale <= 0) return;
             
             const radius = ball.radius * proj.scale;
-            
             ctx.beginPath();
             ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.fillStyle = 'white';
             ctx.fill();
-
             const drawPolygon = (sides, centerX, centerY, size, rotation) => {
                 ctx.beginPath();
                 for (let i = 0; i < sides; i++) {
                     const angle = (Math.PI * 2 / sides) * i + rotation;
                     const x = centerX + Math.cos(angle) * size;
                     const y = centerY + Math.sin(angle) * size;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
                 }
-                ctx.closePath();
-                ctx.fill();
+                ctx.closePath(); ctx.fill();
             };
-            
             ctx.save();
             ctx.translate(proj.x, proj.y);
             ctx.rotate(ball.rotation);
-            
             const patchSize = radius * 0.4;
             const patchDist = radius * 0.7;
-
             ctx.fillStyle = 'black';
             drawPolygon(5, 0, 0, patchSize, 0);
-
             for (let i = 0; i < 5; i++) {
                 const angle = (Math.PI * 2 / 5) * i + Math.PI / 5;
                 const x = Math.cos(angle) * patchDist;
                 const y = Math.sin(angle) * patchDist;
                 drawPolygon(6, x, y, patchSize, 0);
             }
-            
             ctx.restore();
-
             ctx.beginPath();
             ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.strokeStyle = 'black';
@@ -291,16 +286,23 @@
                     checkGoal();
                 }
             }
-
+            
+            // ✨ 골키퍼 AI 수정: 움직이는 범위를 골대보다 넓게 설정
             if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
+                const keeperAreaPadding = 50; // 골대 밖으로 얼마나 더 움직일지
+                
                 goalkeepers.forEach(keeper => {
                     keeper.x += keeper.speedX * keeper.directionX;
                     keeper.y += keeper.speedY * keeper.directionY;
 
-                    if (keeper.x < goal.x || keeper.x + keeper.width > goal.x + goal.width) {
+                    const minX = goal.x - keeperAreaPadding;
+                    const maxX = goal.x + goal.width + keeperAreaPadding - keeper.width;
+                    if (keeper.x < minX || keeper.x > maxX) {
                         keeper.directionX *= -1;
                     }
-                    if (keeper.y < goal.y || keeper.y + keeper.height > goal.y + goal.height) {
+                    const minY = goal.y - keeperAreaPadding;
+                    const maxY = goal.y + goal.height + keeperAreaPadding - keeper.height;
+                    if (keeper.y < minY || keeper.y > maxY) {
                         keeper.directionY *= -1;
                     }
                 });
@@ -312,21 +314,15 @@
             let isSaved = false;
 
             goalkeepers.forEach(keeper => {
-                const gloveHitbox = {
-                    x: keeper.x, y: keeper.y,
-                    width: keeper.width, height: keeper.height
-                };
-
-                const closestX = Math.max(gloveHitbox.x, Math.min(ball.x, gloveHitbox.x + gloveHitbox.width));
-                const closestY = Math.max(gloveHitbox.y, Math.min(ball.y, gloveHitbox.y + gloveHitbox.height));
-
+                const closestX = Math.max(keeper.x, Math.min(ball.x, keeper.x + keeper.width));
+                const closestY = Math.max(keeper.y, Math.min(ball.y, keeper.y + keeper.height));
                 const distanceX = ball.x - closestX;
                 const distanceY = ball.y - closestY;
                 const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-                
                 const requiredPenetration = ball.radius * 0.2;
                 if (distanceSquared < (ball.radius - requiredPenetration) * (ball.radius - requiredPenetration)) {
                     isSaved = true;
+                    blockingKeeper = keeper; // ✨ 공을 막은 골키퍼 저장
                 }
             });
 
@@ -356,6 +352,7 @@
 
         function setupStage() {
             messageBox.style.display = 'none';
+            blockingKeeper = null; // ✨ 초기화
             gameState = 'aiming';
             ball.x = canvas.width / 2;
             ball.y = canvas.height - 50;
