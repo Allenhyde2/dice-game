@@ -10,7 +10,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #1a472a;
+            background-color: #1b3a1b; /* 짙은 녹색 */
             font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
             color: white;
             text-align: center;
@@ -25,9 +25,7 @@
             position: relative;
             width: 900px;
             height: 600px;
-            /* ✨ 배경을 축구장 이미지로 다시 설정 */
-            background: url('https://img.freepik.com/free-photo/empty-soccer-field_1417-1725.jpg?w=1380') no-repeat center center;
-            background-size: cover;
+            background: #275227; /* 기본 잔디색 */
             border: 10px solid #5a3d2b;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
@@ -70,14 +68,16 @@
         let scoreNote = { text: '', x: 0, y: 0, scale: 0, alpha: 0, isShowing: false };
 
         const Z_WALL = 100;
-        const PERSPECTIVE = canvas.height * 0.8;
+        const PERSPECTIVE = canvas.height * 0.9;
         const GRAVITY = 0.2;
         const FLIGHT_TIME = 60;
 
         const dart = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 50 };
         const powerGauge = { value: 0, direction: 1, speed: 0.8 };
-        
         const wall = { x: 0, speed: 2, direction: 1, movementRange: 370 };
+
+        // 골대 정보 객체화
+        const goal = { baseX: 100, baseY: 80, width: 700, height: 450, depth: 100 };
 
         function project(x, y, z) {
             const scale = PERSPECTIVE / (PERSPECTIVE + z);
@@ -91,12 +91,15 @@
         function setupBalloons() {
             balloons.length = 0;
             const rows = 4, cols = 8;
-            const balloonWidth = 90;
-            const balloonHeight = 115;
-            const paddingX = 5;
-            const paddingY = 5;
-            const startX = (canvas.width - (cols * (balloonWidth + paddingX)) + paddingX) / 2;
-            const startY = 120;
+            const balloonWidth = 80, balloonHeight = 100;
+            const paddingX = 5, paddingY = 10;
+            
+            // 골대 안쪽을 기준으로 풍선 위치 계산
+            const gridWidth = cols * (balloonWidth + paddingX) - paddingX;
+            const gridHeight = rows * (balloonHeight + paddingY) - paddingY;
+            const startX = goal.baseX + (goal.width - gridWidth) / 2;
+            const startY = goal.baseY + (goal.height - gridHeight) / 2;
+            
             const pointValues = [10, 10, 20, 20, 50, 50, 100, 200, 500];
 
             for (let r = 0; r < rows; r++) {
@@ -113,64 +116,77 @@
                 }
             }
         }
+        
+        function drawField() {
+            // 잔디 그라데이션
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#318C31');
+            grad.addColorStop(1, '#276827');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분: 골대가 벽의 움직임(wall.x)을 따라가도록 변경
-        // ==========================================================
-        function drawGoalPost() {
-            const goalWidth = 800;
-            const goalHeight = 500;
-            const goalBaseX = (canvas.width - goalWidth) / 2;
-            const goalBaseY = 100;
-
-            // 벽의 현재 x 오프셋을 골대 위치에 더해줌
-            const currentGoalX = goalBaseX + wall.x;
-
-            const proj = project(currentGoalX, goalBaseY, Z_WALL);
-            const projWidth = goalWidth * proj.scale;
-            const projHeight = goalHeight * proj.scale;
-            const projX = (canvas.width - projWidth) / 2 + (wall.x * proj.scale); // 최종 투사 위치에도 오프셋 반영
-            const projY = proj.y;
-
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 15 * proj.scale;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-            ctx.shadowBlur = 10;
-            
-            ctx.strokeRect(projX, projY, projWidth, projHeight);
-            
-            ctx.lineWidth = 2 * proj.scale;
+            // 페널티 박스 라인
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            for(let i = 1; i < 10; i++) {
-                ctx.beginPath();
-                ctx.moveTo(projX + i * (projWidth / 10), projY);
-                ctx.lineTo(projX + i * (projWidth / 10), projY + projHeight);
-                ctx.stroke();
-            }
-            for(let i = 1; i < 6; i++) {
-                 ctx.beginPath();
-                ctx.moveTo(projX, projY + i * (projHeight / 6));
-                ctx.lineTo(projX + projWidth, projY + i * (projHeight / 6));
-                ctx.stroke();
-            }
-            ctx.shadowBlur = 0;
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height - 50, 100, Math.PI * 1.1, Math.PI * 1.9);
+            ctx.stroke();
         }
 
+        function drawGoalPost() {
+            const currentGoalX = goal.baseX + wall.x;
+            
+            // 골대 앞면의 4개 꼭짓점 투영
+            const p1 = project(currentGoalX, goal.baseY, Z_WALL);
+            const p2 = project(currentGoalX + goal.width, goal.baseY, Z_WALL);
+            const p3 = project(currentGoalX + goal.width, goal.baseY + goal.height, Z_WALL);
+            const p4 = project(currentGoalX, goal.baseY + goal.height, Z_WALL);
 
+            // 골대 뒷면의 4개 꼭짓점 투영
+            const p5 = project(currentGoalX, goal.baseY, Z_WALL + goal.depth);
+            const p6 = project(currentGoalX + goal.width, goal.baseY, Z_WALL + goal.depth);
+            const p7 = project(currentGoalX + goal.width, goal.baseY + goal.height, Z_WALL + goal.depth);
+            const p8 = project(currentGoalX, goal.baseY + goal.height, Z_WALL + goal.depth);
+
+            ctx.strokeStyle = '#DDDDDD';
+            ctx.lineWidth = 15 * p1.scale;
+
+            // 뒷면 프레임 먼저 그리기
+            ctx.beginPath();
+            ctx.moveTo(p5.x, p5.y); ctx.lineTo(p6.x, p6.y);
+            ctx.lineTo(p7.x, p7.y); ctx.lineTo(p8.x, p8.y);
+            ctx.closePath();
+            ctx.stroke();
+            
+            // 옆면 연결부 그리기
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y); ctx.lineTo(p5.x, p5.y);
+            ctx.moveTo(p2.x, p2.y); ctx.lineTo(p6.x, p6.y);
+            ctx.moveTo(p3.x, p3.y); ctx.lineTo(p7.x, p7.y);
+            ctx.moveTo(p4.x, p4.y); ctx.lineTo(p8.x, p8.y);
+            ctx.stroke();
+            
+            // 앞면 프레임 그리기
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+            ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+            ctx.closePath();
+            ctx.stroke();
+        }
+        
         function drawBalloons() {
             balloons.forEach(b => {
                 const proj = project(b.baseX + wall.x, b.baseY, b.z);
                 if (!b.isPopped) {
-                    const w = b.width * proj.scale;
-                    const h = b.height * proj.scale;
+                    const w = b.width * proj.scale; const h = b.height * proj.scale;
                     ctx.beginPath();
                     ctx.fillStyle = b.color;
-                    ctx.ellipse(proj.x, proj.y + h/2, w / 2, h / 2, 0, 0, Math.PI * 2);
+                    ctx.ellipse(proj.x + w / 2, proj.y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.moveTo(proj.x, proj.y + h);
-                    ctx.lineTo(proj.x - 5 * proj.scale, proj.y + h + 5 * proj.scale);
-                    ctx.lineTo(proj.x + 5 * proj.scale, proj.y + h + 5 * proj.scale);
+                    ctx.moveTo(proj.x + w / 2, proj.y + h);
+                    ctx.lineTo(proj.x + w / 2 - 5 * proj.scale, proj.y + h + 5 * proj.scale);
+                    ctx.lineTo(proj.x + w / 2 + 5 * proj.scale, proj.y + h + 5 * proj.scale);
                     ctx.closePath();
                     ctx.fill();
                 }
@@ -257,9 +273,7 @@
                         text: `${score} 점`,
                         x: proj.x + (b.width / 2 * proj.scale),
                         y: proj.y + (b.height / 2 * proj.scale),
-                        scale: 0,
-                        alpha: 0,
-                        isShowing: true
+                        scale: 0, alpha: 0, isShowing: true
                     };
                     hit = true;
                     break;
@@ -328,7 +342,7 @@
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             update();
-            
+            drawField();
             drawGoalPost();
             drawBalloons();
             
