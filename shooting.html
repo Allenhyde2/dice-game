@@ -152,15 +152,29 @@
             ctx.closePath(); ctx.stroke();
         }
 
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 1: 골키퍼 그리기 개선 (불투명한 단일 모양)
+        // ==========================================================
         function drawGoalkeepers() {
-            // ✨ 골키퍼를 그리는 로직: hitboxParts를 기반으로 원을 그림
             const drawGlove = (keeper) => {
+                ctx.fillStyle = '#e67e22'; // 주황색
+                ctx.strokeStyle = '#d35400'; // 짙은 주황색 테두리
+                
+                // hitboxParts를 기반으로 먼저 채워진 도형을 그림
                 keeper.hitboxParts.forEach(part => {
                     const proj = project(keeper.x + part.offsetX, keeper.y + part.offsetY, Z_GOAL);
+                    ctx.lineWidth = 2 * proj.scale;
                     ctx.beginPath();
                     ctx.arc(proj.x, proj.y, part.radius * proj.scale, 0, Math.PI * 2);
-                    ctx.fillStyle = '#e67e22';
                     ctx.fill();
+                });
+                // 테두리를 한번만 그려서 하나의 도형처럼 보이게 함
+                keeper.hitboxParts.forEach(part => {
+                     const proj = project(keeper.x + part.offsetX, keeper.y + part.offsetY, Z_GOAL);
+                     ctx.lineWidth = 4 * proj.scale; // 테두리를 약간 두껍게
+                     ctx.beginPath();
+                     ctx.arc(proj.x, proj.y, part.radius * proj.scale, 0, Math.PI * 2);
+                     ctx.stroke();
                 });
             };
 
@@ -175,14 +189,11 @@
             if (gameState === 'result' && gameState === 'nextStage') return;
             const proj = project(ball.x, ball.y, ball.z);
             if (proj.scale <= 0) return;
-            
             const radius = ball.radius * proj.scale;
-            
             ctx.beginPath();
             ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.fillStyle = 'white';
             ctx.fill();
-
             const drawPolygon = (sides, centerX, centerY, size, rotation) => {
                 ctx.beginPath();
                 for (let i = 0; i < sides; i++) {
@@ -195,26 +206,20 @@
                 ctx.closePath();
                 ctx.fill();
             };
-            
             ctx.save();
             ctx.translate(proj.x, proj.y);
             ctx.rotate(ball.rotation);
-            
             const patchSize = radius * 0.4;
             const patchDist = radius * 0.7;
-
             ctx.fillStyle = 'black';
             drawPolygon(5, 0, 0, patchSize, 0);
-
             for (let i = 0; i < 5; i++) {
                 const angle = (Math.PI * 2 / 5) * i + Math.PI / 5;
                 const x = Math.cos(angle) * patchDist;
                 const y = Math.sin(angle) * patchDist;
                 drawPolygon(6, x, y, patchSize, 0);
             }
-            
             ctx.restore();
-
             ctx.beginPath();
             ctx.arc(proj.x, proj.y, radius, 0, Math.PI * 2);
             ctx.strokeStyle = 'black';
@@ -250,7 +255,6 @@
                 if (keys['ArrowRight']) target.x += 5;
                 if (keys['ArrowUp']) target.y -= 5;
                 if (keys['ArrowDown']) target.y += 5;
-
                 const minX = goal.x + target.size;
                 const maxX = goal.x + goal.width - target.size;
                 target.x = Math.max(minX, Math.min(maxX, target.x));
@@ -275,46 +279,40 @@
                 }
             }
 
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분 2: 골키퍼 움직임 범위 계산 수정
+            // ==========================================================
             if (gameState !== 'result' && gameState !== 'gameOver' && gameState !== 'nextStage') {
                 goalkeepers.forEach(keeper => {
-                    const keeperAreaPadding = keeper.width;
+                    const keeperPaddingX = keeper.width; // 가로 크기만큼 좌우로 더 움직임
+                    const keeperPaddingY = keeper.height; // 세로 크기만큼 위아래로 더 움직임
+                    
                     keeper.x += keeper.speedX * keeper.directionX;
                     keeper.y += keeper.speedY * keeper.directionY;
 
-                    const minX = goal.x - keeperAreaPadding;
-                    const maxX = goal.x + goal.width + keeperAreaPadding - keeper.width;
-                    if (keeper.x < minX || keeper.x > maxX) {
-                        keeper.directionX *= -1;
-                    }
-                    const minY = goal.y - keeperAreaPadding;
-                    const maxY = goal.y + goal.height + keeperAreaPadding - keeper.height;
-                    if (keeper.y < minY || keeper.y > maxY) {
-                        keeper.directionY *= -1;
-                    }
+                    const minX = goal.x - keeperPaddingX;
+                    const maxX = goal.x + goal.width + keeperPaddingX - keeper.width;
+                    if (keeper.x < minX || keeper.x > maxX) { keeper.directionX *= -1; }
+
+                    const minY = goal.y - keeperPaddingY;
+                    const maxY = goal.y + goal.height + keeperPaddingY - keeper.height;
+                    if (keeper.y < minY || keeper.y > maxY) { keeper.directionY *= -1; }
                 });
             }
         }
         
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분 1: 충돌 판정 로직 수정
-        // ==========================================================
         function checkGoal() {
             gameState = 'result';
             let message = '';
             let isSaved = false;
-
             for (const keeper of goalkeepers) {
-                // 각 골키퍼의 모든 판정 영역(원)과 공의 충돌을 검사
                 for (const part of keeper.hitboxParts) {
                     const partAbsX = keeper.x + part.offsetX;
                     const partAbsY = keeper.y + part.offsetY;
-
                     const distanceX = ball.x - partAbsX;
                     const distanceY = ball.y - partAbsY;
                     const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
-
                     const penetration = (ball.radius + part.radius) - distance;
-                    
                     if (penetration > ball.radius * 0.2) {
                         isSaved = true;
                         blockingKeeper = keeper;
@@ -348,7 +346,7 @@
         }
         
         // ==========================================================
-        // ✨✨ 핵심 수정 부분 2: 골키퍼 생성 시 판정 영역(hitbox) 정의
+        // ✨✨ 핵심 수정 부분 3: 골키퍼 생성 시 크기 및 hitbox 1.5배 증가
         // ==========================================================
         function setupStage() {
             messageBox.style.display = 'none';
@@ -363,16 +361,15 @@
             
             goalkeepers.length = 0;
             for (let i = 0; i < stage; i++) {
-                const keeperWidth = 100;
-                const keeperHeight = 120;
-                // 각 골키퍼의 판정 영역을 여러 개의 원으로 구성
+                const keeperWidth = 150; // 100 * 1.5
+                const keeperHeight = 180; // 120 * 1.5
                 const hitboxParts = [
-                    { offsetX: 0, offsetY: 0, radius: 45 },         // 손바닥
-                    { offsetX: -30, offsetY: -35, radius: 18 },     // 손가락1
-                    { offsetX: -10, offsetY: -40, radius: 18 },     // 손가락2
-                    { offsetX: 10, offsetY: -40, radius: 18 },      // 손가락3
-                    { offsetX: 30, offsetY: -35, radius: 18 },      // 손가락4
-                    { offsetX: -40, offsetY: 10, radius: 20 },      // 엄지
+                    { offsetX: 0, offsetY: 0, radius: 67.5 },       // 손바닥 45 * 1.5
+                    { offsetX: -45, offsetY: -52.5, radius: 27 },   // 손가락 
+                    { offsetX: -15, offsetY: -60, radius: 27 },
+                    { offsetX: 15, offsetY: -60, radius: 27 },
+                    { offsetX: 45, offsetY: -52.5, radius: 27 },
+                    { offsetX: -60, offsetY: 15, radius: 30 },      // 엄지
                 ];
 
                 goalkeepers.push({
@@ -383,7 +380,7 @@
                     speedY: 1 + Math.random() * 2,
                     directionX: Math.random() > 0.5 ? 1 : -1,
                     directionY: Math.random() > 0.5 ? 1 : -1,
-                    hitboxParts: hitboxParts // 판정 영역 정보 추가
+                    hitboxParts: hitboxParts
                 });
             }
         }
@@ -418,22 +415,16 @@
             if (e.code === 'Space' && gameState === 'powering') {
                 e.preventDefault();
                 gameState = 'flying';
-                
                 const inaccuracyRadius = ball.radius * 2.5;
                 const randomAngle = Math.random() * 2 * Math.PI;
                 const randomDist = Math.random() * inaccuracyRadius;
                 const finalTargetX = target.x + Math.cos(randomAngle) * randomDist;
                 const finalTargetY = target.y + Math.sin(randomAngle) * randomDist;
-                
                 const flightTime = 80 - (powerGauge.value / 100) * 50;
-                
                 const vy_initial = (finalTargetY - ball.y - 0.5 * GRAVITY * flightTime * flightTime) / flightTime;
                 const vx_initial = (finalTargetX - ball.x) / flightTime;
                 const vz_initial = Z_GOAL / flightTime;
-
-                ball.vx = vx_initial;
-                ball.vy = vy_initial;
-                ball.vz = vz_initial;
+                ball.vx = vx_initial; ball.vy = vy_initial; ball.vz = vz_initial;
             }
         });
 
