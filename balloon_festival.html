@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>3D 다트 챌린지 FINAL v2</title>
+    <title>3D 다트 챌린지 FINAL</title>
     <style>
         body {
             display: flex;
@@ -67,20 +67,19 @@
         const particles = [];
 
         const balloonImage = new Image();
-        // 풍선 이미지 URL, 저작권 프리 이미지 사용
-        balloonImage.src = 'https://creazilla-store.fra1.digitaloceanspaces.com/cliparts/78219/red-balloon-clipart-md.png';
+        let imagesLoaded = false;
         
         // ==========================================================
-        // ✨✨ 핵심 수정 부분 ✨✨
-        // 이미지가 모두 로딩된 후, 게임 설정(startGame)과
-        // 애니메이션(gameLoop)을 시작합니다.
+        // ✨✨ 핵심 수정 부분: 풍선 이미지를 요청하신 파란색 풍선으로 교체
         // ==========================================================
+        balloonImage.src = 'https://i.postimg.cc/9QG7cpb3/blue-balloon.png'; // 배경이 제거된 파란색 풍선 이미지
+
         balloonImage.onload = () => {
+            imagesLoaded = true;
             startGame();
             gameLoop();
         };
         balloonImage.onerror = () => {
-            // 이미지 로딩 실패 시 에러 메시지 표시
             messageBox.innerText = "이미지 로딩 실패!";
             messageBox.style.display = 'block';
         };
@@ -124,7 +123,8 @@
                         z: Z_WALL,
                         width: balloonWidth, height: balloonHeight,
                         isPopped: false,
-                        points: pointValues[Math.floor(Math.random() * pointValues.length)]
+                        points: pointValues[Math.floor(Math.random() * pointValues.length)],
+                        color: '#3498db' // 파티클 효과를 위한 파란색 지정
                     });
                 }
             }
@@ -169,6 +169,7 @@
         }
 
         function drawBalloons() {
+            if (!imagesLoaded) return;
             balloons.forEach(b => {
                 const proj = project(b.baseX + wall.x, b.baseY, b.z);
                 if (!b.isPopped) {
@@ -280,7 +281,6 @@
 
         const keys = {};
         window.addEventListener('keydown', e => {
-            keys[e.code] = true;
             if (e.code === 'Space' && gameState === 'ready') {
                 e.preventDefault();
                 gameState = 'powering';
@@ -290,7 +290,6 @@
             }
         });
         window.addEventListener('keyup', e => {
-            keys[e.code] = false;
             if (e.code === 'Space' && gameState === 'powering') {
                 e.preventDefault();
                 gameState = 'throwing';
