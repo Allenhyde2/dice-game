@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (판정 모드)</title>
+    <title>축구 트래핑 타이밍 게임 (프로 모드)</title>
     <style>
         body {
             display: flex;
@@ -42,7 +42,7 @@
             align-items: center;
             padding: 20px;
             box-sizing: border-box;
-            pointer-events: none; /* UI 레이어는 클릭되지 않도록 설정 */
+            pointer-events: none;
         }
         #score {
             font-size: 48px;
@@ -79,12 +79,7 @@
 
         let score = 0;
         let gameState = 'loading';
-
-        // ✨ 새로 추가된 부분: 판정 텍스트 상태
-        let judgment = {
-            text: '',
-            alpha: 0 // 투명도
-        };
+        let judgment = { text: '', alpha: 0 };
 
         const ball = {
             x: canvas.width / 2,
@@ -92,6 +87,7 @@
             radius: 40,
             vy: 0,
             gravity: 0.4,
+            slowVy: 0, // ✨ 새로 추가된 부분: 슬로우 모션 속도
             img: new Image()
         };
         ball.img.src = 'https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg';
@@ -102,7 +98,9 @@
             perfectRadius: 50,
             shrinkingRadius: 150,
             shrinkSpeed: 2,
-            isTiming: false
+            isTiming: false,
+            pulseAlpha: 0, // ✨ 새로 추가된 부분: 타겟 존 효과용
+            pulseSpeed: 0.05
         };
 
         function getRandomRadius(min, max) {
@@ -115,36 +113,65 @@
             messageBox.style.display = 'block';
             gameLoop();
         };
-        ball.img.onerror = function() {
-            messageBox.innerHTML = '게임 리소스를 불러오는 데 실패했습니다.<br>페이지를 새로고침 해주세요.';
-            messageBox.style.display = 'block';
-        }
 
+        // ==========================================================
+        // ✨ 수정된 부분: 공 그리기 및 슬로우 모션 로직
+        // ==========================================================
         function drawBall() {
-            if (gameState === 'playing' && !timingCircle.isTiming) {
-                ball.vy += ball.gravity;
-                ball.y += ball.vy;
+            if (gameState === 'playing') {
+                if (timingCircle.isTiming) {
+                    // 타이밍 시퀀스 중에는 계산된 슬로우 속도로 낙하
+                    ball.y += ball.slowVy;
+                } else {
+                    // 평소에는 중력에 따라 낙하
+                    ball.vy += ball.gravity;
+                    ball.y += ball.vy;
 
-                if (ball.y > canvas.height - 300) {
-                    ball.y = canvas.height - 300;
-                    ball.vy = 0;
-                    timingCircle.isTiming = true;
-                    timingCircle.shrinkingRadius = 150;
+                    // 특정 높이에 도달하면 타이밍 시퀀스 시작
+                    if (ball.y >= canvas.height - 400) {
+                        timingCircle.isTiming = true;
+                        timingCircle.shrinkingRadius = 150;
+                        
+                        // 퍼펙트 타이밍까지 걸리는 프레임 계산
+                        const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
+                        // 해당 프레임 동안 공이 이동해야 할 거리 계산
+                        const distanceToTravel = timingCircle.y - ball.y;
+                        // 프레임당 이동 속도(슬로우 모션 속도) 계산
+                        ball.slowVy = distanceToTravel / framesToPerfect;
+                    }
                 }
             }
+             // 공 그리기
             if (gameState === 'playing' || gameState === 'gameOver') {
                  ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
             }
         }
-
+        
+        // ==========================================================
+        // ✨ 수정된 부분: 눈에 띄는 타겟 존 그리기
+        // ==========================================================
         function drawTimingCircle() {
             if (gameState === 'playing' && timingCircle.isTiming) {
+                // 1. 새로운 '타겟 존' ( pulsing 효과가 있는 두꺼운 외곽선 )
+                timingCircle.pulseAlpha += timingCircle.pulseSpeed;
+                if (timingCircle.pulseAlpha > 1 || timingCircle.pulseAlpha < 0) {
+                    timingCircle.pulseSpeed *= -1;
+                }
+
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
-                ctx.strokeStyle = 'gold';
-                ctx.lineWidth = 5;
+                ctx.strokeStyle = `rgba(255, 215, 0, ${0.3 + timingCircle.pulseAlpha * 0.4})`; // 금색 pulsing
+                ctx.lineWidth = 15; // 두껍게
                 ctx.stroke();
 
+                // 2. 타겟 존의 중앙선
+                ctx.beginPath();
+                ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = 'white'; // 밝은 중앙선
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 3. 줄어드는 원
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
@@ -153,7 +180,6 @@
 
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
 
-                // 시간이 지나서 원이 사라지면 게임오버
                 if (timingCircle.shrinkingRadius < 0) {
                     timingCircle.isTiming = false;
                     gameOver();
@@ -161,20 +187,16 @@
             }
         }
 
-        // ✨ 새로 추가된 부분: 판정 텍스트 그리기
         function drawJudgment() {
             if (judgment.alpha > 0) {
                 ctx.fillStyle = `rgba(255, 255, 255, ${judgment.alpha})`;
                 ctx.font = 'bold 48px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(judgment.text, canvas.width / 2, 250);
-                judgment.alpha -= 0.02; // 서서히 사라지는 효과
+                judgment.alpha -= 0.02;
             }
         }
 
-        // ==========================================================
-        // ✨ 수정된 부분: 판정 로직 전체 변경
-        // ==========================================================
         function trap() {
             if (gameState !== 'playing' || !timingCircle.isTiming) return;
 
@@ -182,38 +204,29 @@
             let points = 0;
             let judgmentText = '';
 
-            // 판정 범위 설정
-            if (diff <= 5) { // Perfect
-                points = 10;
-                judgmentText = 'PERFECT!';
-            } else if (diff <= 10) { // Great
-                points = 8;
-                judgmentText = 'GREAT';
-            } else if (diff <= 20) { // Good
-                points = 5;
-                judgmentText = 'GOOD';
-            } else if (diff <= 35) { // Bad
-                points = 1;
-                judgmentText = 'BAD';
-            } else { // Fail
+            if (diff <= 5) {
+                points = 10; judgmentText = 'PERFECT!';
+            } else if (diff <= 10) {
+                points = 8; judgmentText = 'GREAT';
+            } else if (diff <= 20) {
+                points = 5; judgmentText = 'GOOD';
+            } else if (diff <= 35) {
+                points = 1; judgmentText = 'BAD';
+            } else {
                 gameOver();
-                return; // 실패 시 아래 성공 로직을 실행하지 않고 함수 종료
+                return;
             }
 
-            // 성공 시 공통 로직
             score += points;
             scoreEl.textContent = `SCORE: ${score}`;
-
-            // 판정 텍스트 표시
             judgment.text = judgmentText;
             judgment.alpha = 1;
 
-            // 다음 트래핑 준비
-            ball.y = canvas.height - 301;
-            ball.vy = -15;
+            // 성공 시 공이 위로 튀어오르는 효과 준비
+            ball.vy = -18; // 튀어오르는 힘 강화
             timingCircle.isTiming = false;
             timingCircle.shrinkSpeed += 0.1;
-            timingCircle.perfectRadius = getRandomRadius(30, 70);
+            timingCircle.perfectRadius = getRandomRadius(35, 65);
         }
 
         function gameOver() {
@@ -231,17 +244,17 @@
             timingCircle.shrinkSpeed = 2;
             messageBox.style.display = 'none';
             gameState = 'playing';
-            timingCircle.perfectRadius = getRandomRadius(30, 70);
+            timingCircle.perfectRadius = getRandomRadius(35, 65);
         }
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             if (gameState === 'playing' || gameState === 'gameOver') {
-                drawBall();
                 drawTimingCircle();
+                drawBall();
             }
-            drawJudgment(); // 판정 텍스트를 항상 그리도록 호출
+            drawJudgment();
             
             requestAnimationFrame(gameLoop);
         }
