@@ -10,7 +10,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #1a472a; /* 어두운 잔디색 */
+            background-color: #1a472a;
             font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
             color: white;
             text-align: center;
@@ -25,8 +25,8 @@
             position: relative;
             width: 900px;
             height: 600px;
-            /* ✨ 배경을 축구장 이미지로 변경 */
-            background: url('https://img.freepik.com/free-photo/green-grass-soccer-field_99433-2315.jpg?w=1380') no-repeat center center;
+            /* ✨ 배경을 축구장 이미지로 다시 설정 */
+            background: url('https://img.freepik.com/free-photo/empty-soccer-field_1417-1725.jpg?w=1380') no-repeat center center;
             background-size: cover;
             border: 10px solid #5a3d2b;
             border-radius: 10px;
@@ -95,8 +95,6 @@
             const balloonHeight = 115;
             const paddingX = 5;
             const paddingY = 5;
-
-            // ✨ 풍선 위치를 골대 안에 맞게 조정
             const startX = (canvas.width - (cols * (balloonWidth + paddingX)) + paddingX) / 2;
             const startY = 120;
             const pointValues = [10, 10, 20, 20, 50, 50, 100, 200, 500];
@@ -117,45 +115,47 @@
         }
 
         // ==========================================================
-        // ✨✨ 핵심 수정 부분: 골대 그리기 함수 추가
+        // ✨✨ 핵심 수정 부분: 골대가 벽의 움직임(wall.x)을 따라가도록 변경
         // ==========================================================
         function drawGoalPost() {
-            const postWidth = canvas.width * 0.8;
-            const postHeight = canvas.height * 0.8;
-            const postX = (canvas.width - postWidth) / 2;
-            const postY = 50;
+            const goalWidth = 800;
+            const goalHeight = 500;
+            const goalBaseX = (canvas.width - goalWidth) / 2;
+            const goalBaseY = 100;
 
-            const proj = project(postX, postY, Z_WALL);
-            const projWidth = postWidth * proj.scale;
-            const projHeight = postHeight * proj.scale;
-            const projX = (canvas.width - projWidth) / 2;
-            const projY = postY * proj.scale;
+            // 벽의 현재 x 오프셋을 골대 위치에 더해줌
+            const currentGoalX = goalBaseX + wall.x;
+
+            const proj = project(currentGoalX, goalBaseY, Z_WALL);
+            const projWidth = goalWidth * proj.scale;
+            const projHeight = goalHeight * proj.scale;
+            const projX = (canvas.width - projWidth) / 2 + (wall.x * proj.scale); // 최종 투사 위치에도 오프셋 반영
+            const projY = proj.y;
 
             ctx.strokeStyle = '#FFFFFF';
             ctx.lineWidth = 15 * proj.scale;
             ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
             ctx.shadowBlur = 10;
             
-            // 골대 프레임
             ctx.strokeRect(projX, projY, projWidth, projHeight);
-
-            // 골대 그물
+            
             ctx.lineWidth = 2 * proj.scale;
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
             for(let i = 1; i < 10; i++) {
-                // 세로선
                 ctx.beginPath();
                 ctx.moveTo(projX + i * (projWidth / 10), projY);
                 ctx.lineTo(projX + i * (projWidth / 10), projY + projHeight);
                 ctx.stroke();
-                // 가로선
-                ctx.beginPath();
-                ctx.moveTo(projX, projY + i * (projHeight / 10));
-                ctx.lineTo(projX + projWidth, projY + i * (projHeight / 10));
+            }
+            for(let i = 1; i < 6; i++) {
+                 ctx.beginPath();
+                ctx.moveTo(projX, projY + i * (projHeight / 6));
+                ctx.lineTo(projX + projWidth, projY + i * (projHeight / 6));
                 ctx.stroke();
             }
             ctx.shadowBlur = 0;
         }
+
 
         function drawBalloons() {
             balloons.forEach(b => {
@@ -165,12 +165,12 @@
                     const h = b.height * proj.scale;
                     ctx.beginPath();
                     ctx.fillStyle = b.color;
-                    ctx.ellipse(proj.x + w / 2, proj.y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+                    ctx.ellipse(proj.x, proj.y + h/2, w / 2, h / 2, 0, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.moveTo(proj.x + w / 2, proj.y + h);
-                    ctx.lineTo(proj.x + w / 2 - 5 * proj.scale, proj.y + h + 5 * proj.scale);
-                    ctx.lineTo(proj.x + w / 2 + 5 * proj.scale, proj.y + h + 5 * proj.scale);
+                    ctx.moveTo(proj.x, proj.y + h);
+                    ctx.lineTo(proj.x - 5 * proj.scale, proj.y + h + 5 * proj.scale);
+                    ctx.lineTo(proj.x + 5 * proj.scale, proj.y + h + 5 * proj.scale);
                     ctx.closePath();
                     ctx.fill();
                 }
@@ -329,10 +329,9 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             update();
             
-            // ✨ 그리기 순서 변경: 골대 -> 풍선
             drawGoalPost();
             drawBalloons();
-
+            
             const dartProj = project(dart.x, dart.y, dart.z);
             if (gameState !== 'ready') {
                  drawDart(dartProj.x, dartProj.y, dartProj.scale);
