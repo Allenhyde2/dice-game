@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (랜덤 모드)</title>
+    <title>축구 트래핑 타이밍 게임 (판정 모드)</title>
     <style>
         body {
             display: flex;
@@ -42,6 +42,7 @@
             align-items: center;
             padding: 20px;
             box-sizing: border-box;
+            pointer-events: none; /* UI 레이어는 클릭되지 않도록 설정 */
         }
         #score {
             font-size: 48px;
@@ -79,6 +80,12 @@
         let score = 0;
         let gameState = 'loading';
 
+        // ✨ 새로 추가된 부분: 판정 텍스트 상태
+        let judgment = {
+            text: '',
+            alpha: 0 // 투명도
+        };
+
         const ball = {
             x: canvas.width / 2,
             y: 150,
@@ -92,19 +99,15 @@
         const timingCircle = {
             x: canvas.width / 2,
             y: canvas.height - 200,
-            perfectRadius: 50, // 시작 값, 바로 랜덤으로 바뀜
+            perfectRadius: 50,
             shrinkingRadius: 150,
             shrinkSpeed: 2,
             isTiming: false
         };
 
-        // ==========================================================
-        // ✨ 새로 추가된 부분: 랜덤 숫자 생성 함수
-        // ==========================================================
         function getRandomRadius(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
-
 
         ball.img.onload = function() {
             gameState = 'ready';
@@ -141,44 +144,76 @@
                 ctx.strokeStyle = 'gold';
                 ctx.lineWidth = 5;
                 ctx.stroke();
-                ctx.closePath();
 
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
                 ctx.lineWidth = 3;
                 ctx.stroke();
-                ctx.closePath();
 
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
 
-                if (timingCircle.shrinkingRadius < timingCircle.perfectRadius - 15) {
+                // 시간이 지나서 원이 사라지면 게임오버
+                if (timingCircle.shrinkingRadius < 0) {
+                    timingCircle.isTiming = false;
                     gameOver();
                 }
             }
         }
 
+        // ✨ 새로 추가된 부분: 판정 텍스트 그리기
+        function drawJudgment() {
+            if (judgment.alpha > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${judgment.alpha})`;
+                ctx.font = 'bold 48px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(judgment.text, canvas.width / 2, 250);
+                judgment.alpha -= 0.02; // 서서히 사라지는 효과
+            }
+        }
+
+        // ==========================================================
+        // ✨ 수정된 부분: 판정 로직 전체 변경
+        // ==========================================================
         function trap() {
             if (gameState !== 'playing' || !timingCircle.isTiming) return;
 
             const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
+            let points = 0;
+            let judgmentText = '';
 
-            if (diff <= 15) {
-                score++;
-                scoreEl.textContent = `SCORE: ${score}`;
-                ball.y = canvas.height - 301;
-                ball.vy = -15;
-                timingCircle.isTiming = false;
-                timingCircle.shrinkSpeed += 0.1;
-
-                // ==========================================================
-                // ✨ 수정된 부분: 성공 시 다음 퍼펙트 존 크기를 랜덤으로 변경
-                // ==========================================================
-                timingCircle.perfectRadius = getRandomRadius(30, 70); // 30 ~ 70 픽셀 사이로 변경
-
-            } else {
+            // 판정 범위 설정
+            if (diff <= 5) { // Perfect
+                points = 10;
+                judgmentText = 'PERFECT!';
+            } else if (diff <= 10) { // Great
+                points = 8;
+                judgmentText = 'GREAT';
+            } else if (diff <= 20) { // Good
+                points = 5;
+                judgmentText = 'GOOD';
+            } else if (diff <= 35) { // Bad
+                points = 1;
+                judgmentText = 'BAD';
+            } else { // Fail
                 gameOver();
+                return; // 실패 시 아래 성공 로직을 실행하지 않고 함수 종료
             }
+
+            // 성공 시 공통 로직
+            score += points;
+            scoreEl.textContent = `SCORE: ${score}`;
+
+            // 판정 텍스트 표시
+            judgment.text = judgmentText;
+            judgment.alpha = 1;
+
+            // 다음 트래핑 준비
+            ball.y = canvas.height - 301;
+            ball.vy = -15;
+            timingCircle.isTiming = false;
+            timingCircle.shrinkSpeed += 0.1;
+            timingCircle.perfectRadius = getRandomRadius(30, 70);
         }
 
         function gameOver() {
@@ -196,10 +231,6 @@
             timingCircle.shrinkSpeed = 2;
             messageBox.style.display = 'none';
             gameState = 'playing';
-
-            // ==========================================================
-            // ✨ 수정된 부분: 게임 재시작 시 퍼펙트 존 크기를 랜덤으로 설정
-            // ==========================================================
             timingCircle.perfectRadius = getRandomRadius(30, 70);
         }
 
@@ -210,6 +241,7 @@
                 drawBall();
                 drawTimingCircle();
             }
+            drawJudgment(); // 판정 텍스트를 항상 그리도록 호출
             
             requestAnimationFrame(gameLoop);
         }
@@ -220,7 +252,6 @@
                 if (gameState === 'playing') {
                     trap();
                 } else if (gameState === 'gameOver' || gameState === 'ready') {
-                    // ✨ 수정된 부분: 게임 시작과 재시작 로직을 resetGame으로 통합
                     resetGame();
                 }
             }
