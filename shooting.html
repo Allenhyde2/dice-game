@@ -68,9 +68,6 @@
         let gameState = 'loading';
         const keys = {};
 
-        // ==========================================================
-        // ✨✨ 핵심 추가 부분 1: 스테이지 및 점수 변수 추가
-        // ==========================================================
         let score = 0;
         let stage = 1;
 
@@ -87,7 +84,6 @@
             z: Z_GOAL, depth: 150
         };
         
-        // ✨ 골키퍼를 여러 명 담을 배열로 변경
         const goalkeepers = [];
 
         function project(x, y, z) {
@@ -155,10 +151,24 @@
             ctx.closePath(); ctx.stroke();
         }
 
-        // ✨ 여러 명의 골키퍼를 그리는 함수로 변경
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 1: 골키퍼 그리기 함수 수정 (버그 해결)
+        // ==========================================================
         function drawGoalkeepers() {
             if (gameState === 'result' || gameState === 'gameOver') return;
             
+            // 손가락을 그리는 헬퍼 함수
+            const drawFinger = (x, y, width, height, angle) => {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.roundRect(-width/2, -height, width, height, width/2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            };
+
             goalkeepers.forEach(keeper => {
                 const proj = project(keeper.x, keeper.y, Z_GOAL);
                 const w = keeper.width * proj.scale;
@@ -167,24 +177,22 @@
                 ctx.fillStyle = '#e67e22';
                 ctx.strokeStyle = '#d35400';
                 ctx.lineWidth = 2 * proj.scale;
-
-                const drawFinger = (x, y, width, height, angle) => {
-                    ctx.save();
-                    ctx.translate(x, y);
-                    ctx.rotate(angle);
-                    ctx.beginPath();
-                    ctx.roundRect(-width/2, -height, width, height, width/2);
-                    ctx.fill();
-                    ctx.stroke();
-                    ctx.restore();
-                };
                 
+                // 손바닥
+                ctx.beginPath();
+                ctx.ellipse(proj.x, proj.y, w * 0.4, h * 0.45, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // 손가락들
                 const fingerW = w * 0.18;
                 const fingerH = h * 0.5;
                 drawFinger(proj.x - w * 0.3, proj.y - h * 0.3, fingerW, fingerH, -0.2);
                 drawFinger(proj.x - w * 0.1, proj.y - h * 0.4, fingerW, fingerH, -0.05);
                 drawFinger(proj.x + w * 0.1, proj.y - h * 0.4, fingerW, fingerH, 0.05);
                 drawFinger(proj.x + w * 0.3, proj.y - h * 0.3, fingerW, fingerH, 0.2);
+                
+                // 엄지
                 drawFinger(proj.x - w * 0.4, proj.y + h * 0.1, fingerW, fingerH * 0.8, -0.8);
             });
         }
@@ -244,9 +252,6 @@
              ctx.stroke();
         }
         
-        // ==========================================================
-        // ✨✨ 핵심 추가 부분 2: 스테이지/점수 UI 그리기 함수
-        // ==========================================================
         function drawUI() {
             ctx.fillStyle = 'white';
             ctx.font = '24px "Pretendard", sans-serif';
@@ -286,7 +291,6 @@
                 }
             }
 
-            // ✨ 여러 명의 골키퍼 위치 업데이트
             if (gameState !== 'result' && gameState !== 'gameOver') {
                 goalkeepers.forEach(keeper => {
                     keeper.x += keeper.speedX * keeper.directionX;
@@ -302,15 +306,11 @@
             }
         }
         
-        // ==========================================================
-        // ✨✨ 핵심 추가 부분 3: 게임오버 및 스테이지 진행 로직
-        // ==========================================================
         function checkGoal() {
             gameState = 'result';
             let message = '';
             let isSaved = false;
 
-            // 모든 골키퍼와 충돌 검사
             goalkeepers.forEach(keeper => {
                 const closestX = Math.max(keeper.x, Math.min(ball.x, keeper.x + keeper.width));
                 const closestY = Math.max(keeper.y, Math.min(ball.y, keeper.y + keeper.height));
@@ -323,7 +323,7 @@
             });
 
             if (isSaved) {
-                gameState = 'gameOver'; // 게임오버 상태로 변경
+                gameState = 'gameOver';
                 message = 'NO GOAL!';
                 messageBox.style.color = '#ff4757';
                 messageBox.innerHTML = `GAME OVER<div id="retry-message">FINAL SCORE: ${score}<br>RETRY? (Enter)</div>`;
@@ -334,7 +334,7 @@
                 messageBox.innerHTML = `${message}<div id="retry-message">NEXT STAGE!</div>`;
                 score += 100;
                 stage += 1;
-                setTimeout(setupStage, 2000); // 2초 후 다음 스테이지 준비
+                setTimeout(setupStage, 2000);
             } else {
                 message = 'MISS';
                 messageBox.style.color = 'white';
@@ -344,7 +344,6 @@
             messageBox.style.display = 'block';
         }
 
-        // 스테이지를 준비하는 함수
         function setupStage() {
             messageBox.style.display = 'none';
             gameState = 'aiming';
@@ -355,7 +354,6 @@
             target.x = canvas.width / 2;
             target.y = goal.y + goal.height / 2;
             
-            // 현재 스테이지 수만큼 골키퍼 생성
             goalkeepers.length = 0;
             for (let i = 0; i < stage; i++) {
                 goalkeepers.push({
@@ -370,7 +368,6 @@
             }
         }
 
-        // 게임을 완전히 새로 시작하는 함수
         function startGame() {
             score = 0;
             stage = 1;
@@ -387,7 +384,6 @@
                     powerGauge.direction = 1;
                 }
             } else if (e.code === 'Enter' && (gameState === 'result' || gameState === 'gameOver')) {
-                // MISS일 경우 현재 스테이지 재시도, 게임오버일 경우 완전 새로 시작
                 if (gameState === 'gameOver') {
                     startGame();
                 } else {
@@ -424,20 +420,23 @@
             ctx.fillRect(barX, barY, gaugeWidth, 30);
         }
         
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 2: 그리기 순서 변경 (골키퍼가 골대 앞에)
+        // ==========================================================
         function gameLoop() {
             update();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawField();
+            drawGoalkeepers(); // 골키퍼를 먼저 그려서 골대보다 앞에 보이게 함
             drawGoalPost();
-            drawGoalkeepers();
             drawBall();
             drawTarget();
             drawPowerGauge();
-            drawUI(); // ✨ UI 그리기
+            drawUI();
             requestAnimationFrame(gameLoop);
         }
         
-        startGame(); // ✨ 게임 시작
+        startGame();
         gameLoop();
     </script>
 </body>
