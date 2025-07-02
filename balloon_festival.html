@@ -61,10 +61,18 @@
         const ctx = canvas.getContext('2d');
         const messageBox = document.getElementById('message-box');
 
-        let gameState = 'loading';
+        let gameState = 'ready';
         let score = 0;
         const balloons = [];
         const particles = [];
+        // ✨ 점수 쪽지 상태 객체
+        let scoreNote = {
+            text: '',
+            x: 0, y: 0,
+            scale: 0,
+            alpha: 0,
+            isShowing: false
+        };
 
         const Z_WALL = 100;
         const PERSPECTIVE = canvas.height * 0.8;
@@ -74,12 +82,7 @@
         const dart = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 50 };
         const powerGauge = { value: 0, direction: 1, speed: 0.8 };
         
-        const wall = {
-            x: 0,
-            speed: 2,
-            direction: 1,
-            movementRange: 370
-        };
+        const wall = { x: 0, speed: 2, direction: 1, movementRange: 370 };
 
         function project(x, y, z) {
             const scale = PERSPECTIVE / (PERSPECTIVE + z);
@@ -147,21 +150,15 @@
             }
         }
 
-        // ✨✨ 핵심 수정 부분: 이미지를 다시 코드로 그린 타원형으로 변경
         function drawBalloons() {
             balloons.forEach(b => {
                 const proj = project(b.baseX + wall.x, b.baseY, b.z);
                 if (!b.isPopped) {
-                    const w = b.width * proj.scale;
-                    const h = b.height * proj.scale;
-                    
-                    // 타원 그리기
+                    const w = b.width * proj.scale, h = b.height * proj.scale;
                     ctx.beginPath();
                     ctx.fillStyle = b.color;
                     ctx.ellipse(proj.x + w / 2, proj.y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
                     ctx.fill();
-
-                    // 풍선 꼭지 그리기
                     ctx.beginPath();
                     ctx.moveTo(proj.x + w / 2, proj.y + h);
                     ctx.lineTo(proj.x + w / 2 - 5 * proj.scale, proj.y + h + 5 * proj.scale);
@@ -192,8 +189,35 @@
             const topY = balloons[0].baseY + balloons[0].height / 2;
             const bottomY = balloons[balloons.length - 1].baseY + balloons[balloons.length - 1].height / 2;
             const targetY = bottomY - (power / 100) * (bottomY - topY);
-            const vy_initial = (targetY - dart.y - 0.5 * GRAVITY * FLIGHT_TIME * FLIGHT_TIME) / FLIGHT_TIME;
-            return vy_initial;
+            return (targetY - dart.y - 0.5 * GRAVITY * FLIGHT_TIME * FLIGHT_TIME) / FLIGHT_TIME;
+        }
+        
+        // ✨ 점수 쪽지를 그리는 함수
+        function drawScoreNote() {
+            if (!scoreNote.isShowing) return;
+
+            if (scoreNote.scale < 1) scoreNote.scale += 0.05;
+            if (scoreNote.alpha < 1) scoreNote.alpha += 0.05;
+
+            ctx.save();
+            ctx.translate(scoreNote.x, scoreNote.y);
+            ctx.scale(scoreNote.scale, scoreNote.scale);
+            ctx.rotate(-0.1);
+            ctx.globalAlpha = scoreNote.alpha;
+            
+            ctx.fillStyle = '#ffffe0';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(-50, -35, 100, 70);
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#34495e';
+            ctx.font = 'bold 32px "Gothic A1", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(scoreNote.text, 0, 0);
+
+            ctx.restore();
         }
         
         function update() {
@@ -201,7 +225,6 @@
                 wall.x += wall.speed * wall.direction;
                 if (Math.abs(wall.x) > wall.movementRange) { wall.direction *= -1; }
             }
-
             if (gameState === 'powering') {
                 powerGauge.value += powerGauge.direction * powerGauge.speed;
                 if (powerGauge.value > 100 || powerGauge.value < 0) {
@@ -228,11 +251,21 @@
                     score = b.points;
                     const proj = project(currentBalloonX, b.baseY, b.z);
                     createParticles(proj.x + (b.width/2*proj.scale), proj.y + (b.height/2*proj.scale), b.color);
+                    
+                    // ✨ 충돌 시 점수 쪽지 상태를 설정
+                    scoreNote = {
+                        text: `${score} 점`,
+                        x: proj.x + (b.width / 2 * proj.scale),
+                        y: proj.y + (b.height / 2 * proj.scale),
+                        scale: 0,
+                        alpha: 0,
+                        isShowing: true
+                    };
                     hit = true;
                     break;
                 }
             }
-            setTimeout(gameOver, 1000);
+            setTimeout(gameOver, 1500);
         }
 
         function createParticles(x,y,c){for(let i=0;i<20;i++){particles.push({x,y,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,s:Math.random()*3+1,c,a:1})}}
@@ -241,6 +274,7 @@
         function startGame() {
             messageBox.style.display = 'none';
             score = 0;
+            scoreNote.isShowing = false; // ✨ 게임 시작 시 쪽지 숨기기
             setupBalloons();
             gameState = 'ready';
             dart.x = canvas.width / 2;
@@ -297,19 +331,16 @@
             drawWall();
             drawBalloons();
             
-            // ✨✨ 핵심 수정 부분: 궤적 그리기 함수 호출 제거
-            // drawTrajectory(); 
-            
             const dartProj = project(dart.x, dart.y, dart.z);
             if (gameState !== 'ready') {
                  drawDart(dartProj.x, dartProj.y, dartProj.scale);
             }
             drawParticles();
+            drawScoreNote(); // ✨ 점수 쪽지 그리기 함수 호출
             drawPowerGauge();
             requestAnimationFrame(gameLoop);
         }
         
-        // 게임 시작
         startGame();
         gameLoop();
     </script>
