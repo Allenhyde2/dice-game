@@ -214,7 +214,7 @@
             for (let i = judgments.length - 1; i >= 0; i--) {
                 const j = judgments[i];
                 j.y += j.vy;
-                j.alpha -= 0.01;
+                j.alpha -= 0.015;
                 if (j.alpha <= 0) {
                     judgments.splice(i, 1);
                     continue;
@@ -274,8 +274,12 @@
 
             // 새로운 판정 효과를 배열에 추가
             judgments.push({ 
-                text: judgmentText, color: judgmentColor, alpha: 1, 
-                x: timingCircle.x, y: timingCircle.y - 20, vy: -1 
+                text: judgmentText, 
+                color: judgmentColor, 
+                alpha: 1, 
+                x: timingCircle.x, 
+                y: timingCircle.y - 20, 
+                vy: -1 
             });
             // 새로운 점수 효과를 배열에 추가
             pointFeedbacks.push({ 
@@ -317,7 +321,7 @@
                 drawBall();
                 drawTimingCircle();
             }
-            drawJudgment();
+            drawJudgments();
             drawPointFeedback();
             requestAnimationFrame(gameLoop);
         }
