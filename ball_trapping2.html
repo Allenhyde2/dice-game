@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (v2.1)</title>
+    <title>축구 트래핑 타이밍 게임 (v2.3)</title>
     <style>
         body {
             display: flex;
@@ -79,8 +79,12 @@
 
         let score = 0;
         let gameState = 'loading';
+        let canTrap = true; 
         
-        let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 1: 판정 효과를 담을 배열로 변경
+        // ==========================================================
+        let judgments = [];
         let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
 
         const ball = {
@@ -113,6 +117,10 @@
             messageBox.style.display = 'block';
             gameLoop();
         };
+        ball.img.onerror = function() {
+            messageBox.innerHTML = `이미지 로딩 실패!`;
+            messageBox.style.display = 'block';
+        };
         
         function drawBall() {
             if (gameState === 'playing') {
@@ -124,6 +132,7 @@
                     
                     if (ball.y >= canvas.height - 400 && ball.vy > 0) {
                         timingCircle.isTiming = true;
+                        canTrap = true; // 새로운 타이밍 시퀀스 시작 시 입력 잠금 해제
                         timingCircle.shrinkingRadius = 150;
                         const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
                         const distanceToTravel = timingCircle.y - ball.y;
@@ -174,19 +183,29 @@
             }
         }
         
-        function drawJudgment() {
-            if (judgment.alpha > 0) {
-                judgment.y += judgment.vy;
-                judgment.alpha -= 0.01; 
-                ctx.fillStyle = judgment.color;
-                ctx.globalAlpha = judgment.alpha;
+        // ==========================================================
+        // ✨✨ 핵심 수정 부분 2: 판정 효과 배열을 순회하며 그리는 함수
+        // ==========================================================
+        function drawJudgments() {
+            for (let i = judgments.length - 1; i >= 0; i--) {
+                const j = judgments[i];
+                j.y += j.vy;
+                j.alpha -= 0.015;
+
+                if (j.alpha <= 0) {
+                    judgments.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = j.alpha;
+                ctx.fillStyle = j.color;
                 ctx.font = 'bold 48px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.shadowColor = 'black';
                 ctx.shadowBlur = 5;
-                ctx.fillText(judgment.text, judgment.x, judgment.y);
-                ctx.globalAlpha = 1.0;
-                ctx.shadowBlur = 0;
+                ctx.fillText(j.text, j.x, j.y);
+                ctx.restore();
             }
         }
 
@@ -227,20 +246,23 @@
             score += points;
             scoreEl.textContent = `SCORE: ${score}`;
 
-            judgment.text = judgmentText;
-            judgment.color = judgmentColor;
-            judgment.alpha = 1;
-            judgment.x = timingCircle.x;
-            judgment.y = timingCircle.y - 20;
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분 3: 새로운 판정 효과를 배열에 추가
+            // ==========================================================
+            judgments.push({
+                text: judgmentText,
+                color: judgmentColor,
+                alpha: 1,
+                x: timingCircle.x,
+                y: timingCircle.y - 20,
+                vy: -1
+            });
 
-            // ==========================================================
-            // ✨✨ 핵심 수정 부분: 획득 점수 텍스트 위치 변경
-            // ==========================================================
             pointFeedback.text = `+${points}`;
             pointFeedback.color = judgmentColor;
             pointFeedback.alpha = 1;
-            pointFeedback.x = canvas.width / 2 + 80; // SCORE 글자 오른쪽으로 위치 조정
-            pointFeedback.y = 90; // SCORE 텍스트 바로 아래로 y좌표 조정
+            pointFeedback.x = canvas.width / 2 + 80;
+            pointFeedback.y = 90;
             
             ball.vy = -18;
             timingCircle.isTiming = false;
@@ -250,6 +272,7 @@
 
         function gameOver() {
             gameState = 'gameOver';
+            canTrap = false;
             messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 시작하려면 SPACE를 누르세요`;
             messageBox.style.display = 'block';
             timingCircle.isTiming = false;
@@ -274,7 +297,7 @@
                 drawBall();
             }
             drawPointFeedback();
-            drawJudgment(); 
+            drawJudgments(); // ✨ 수정된 함수 호출
             
             requestAnimationFrame(gameLoop);
         }
@@ -282,7 +305,8 @@
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
-                if (gameState === 'playing') {
+                if (gameState === 'playing' && canTrap) {
+                    canTrap = false; // ✨ 한번 판정하면 바로 잠금
                     trap();
                 } else if (gameState === 'gameOver' || gameState === 'ready') {
                     resetGame();
