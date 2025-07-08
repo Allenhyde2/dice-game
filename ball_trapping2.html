@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (v2.4)</title>
+    <title>축구 트래핑 타이밍 게임 (Hard Mode)</title>
     <style>
         body {
             display: flex;
@@ -79,7 +79,6 @@
         const messageBox = document.getElementById('message-box');
 
         let score = 0;
-        // ✨ 트래핑 성공 횟수를 저장할 변수 추가
         let trapCount = 0;
         let gameState = 'loading';
         let canTrap = true; 
@@ -103,7 +102,10 @@
             y: canvas.height - 200,
             perfectRadius: 50,
             shrinkingRadius: 150,
-            shrinkSpeed: 2,
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분 1: 원 감소 속도 1.2배 증가
+            // ==========================================================
+            shrinkSpeed: 2.4, // 2 * 1.2
             isTiming: false,
         };
 
@@ -227,20 +229,22 @@
             let judgmentText = '';
             let judgmentColor = '';
 
-            if (diff <= 5) {
+            // ==========================================================
+            // ✨✨ 핵심 수정 부분 2: 판정 범위를 90%로 감소
+            // ==========================================================
+            if (diff <= 4.5) { // 5 * 0.9
                 points = 10; judgmentText = 'PERFECT!'; judgmentColor = '#00FF7F';
-            } else if (diff <= 10) {
+            } else if (diff <= 9) { // 10 * 0.9
                 points = 8; judgmentText = 'GREAT'; judgmentColor = '#00BFFF';
-            } else if (diff <= 20) {
+            } else if (diff <= 18) { // 20 * 0.9
                 points = 5; judgmentText = 'GOOD'; judgmentColor = '#FFFFFF';
-            } else if (diff <= 35) {
+            } else if (diff <= 31.5) { // 35 * 0.9
                 points = 1; judgmentText = 'BAD'; judgmentColor = '#FFA500';
             } else {
                 gameOver();
                 return;
             }
             
-            // ✨ 트래핑 성공 시 점수와 횟수 증가
             score += points;
             trapCount++;
             scoreEl.textContent = `SCORE: ${score}`;
@@ -262,14 +266,13 @@
             
             ball.vy = -18;
             timingCircle.isTiming = false;
-            timingCircle.shrinkSpeed += 0.1;
+            timingCircle.shrinkSpeed += 0.12; // 0.1 * 1.2
             timingCircle.perfectRadius = getRandomRadius(35, 65);
         }
 
         function gameOver() {
             gameState = 'gameOver';
             canTrap = false;
-            // ✨ 게임오버 메시지에 트래핑 횟수 추가
             messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br>TOTAL TRAPS: ${trapCount}<br><br>다시 시작하려면 SPACE를 누르세요`;
             messageBox.style.display = 'block';
             timingCircle.isTiming = false;
@@ -277,11 +280,11 @@
 
         function resetGame() {
             score = 0;
-            trapCount = 0; // ✨ 게임 재시작 시 횟수 초기화
+            trapCount = 0;
             scoreEl.textContent = `SCORE: ${score}`;
             ball.y = 150;
             ball.vy = 0;
-            timingCircle.shrinkSpeed = 2;
+            timingCircle.shrinkSpeed = 2.4; // 초기화 시에도 1.2배 적용
             messageBox.style.display = 'none';
             gameState = 'playing';
             timingCircle.perfectRadius = getRandomRadius(35, 65);
