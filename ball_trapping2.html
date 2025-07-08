@@ -80,9 +80,10 @@
         let gameState = 'loading';
         let canTrap = true;
 
-        // ✨ 애니메이션을 위해 scale 속성 추가
-        let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1, scale: 1 };
-        let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5, scale: 1 };
+        let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
+        let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
+        // ✨ 반짝임 효과를 위한 파티클 배열
+        const sparkleParticles = [];
 
         const ball = {
             x: canvas.width / 2,
@@ -133,10 +134,8 @@
                 ball.y += ball.slowVy;
                 ball.rotation += ball.slowVy * 0.02;
             }
-
-            const x = ball.x;
-            const y = ball.y;
-            const radius = ball.radius;
+            
+            const x = ball.x, y = ball.y, radius = ball.radius;
             ctx.beginPath();
             ctx.arc(x, y, radius, 0, Math.PI * 2);
             ctx.fillStyle = 'white';
@@ -147,11 +146,9 @@
                     const angle = (Math.PI * 2 / sides) * i + rotation;
                     const px = centerX + Math.cos(angle) * size;
                     const py = centerY + Math.sin(angle) * size;
-                    if (i === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
                 }
-                ctx.closePath();
-                ctx.fill();
+                ctx.closePath(); ctx.fill();
             };
             ctx.save();
             ctx.translate(x, y);
@@ -182,7 +179,6 @@
                 let red = Math.floor(255 * ratio);
                 let green = Math.floor(255 * (1 - ratio));
                 const dynamicColor = `rgb(${red}, ${green}, 0)`;
-
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = dynamicColor;
@@ -191,82 +187,95 @@
                 ctx.shadowColor = dynamicColor;
                 ctx.stroke();
                 ctx.shadowBlur = 0;
-
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 2;
                 ctx.stroke();
-
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
                 ctx.lineWidth = 3;
                 ctx.stroke();
-
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
-
                 if (timingCircle.shrinkingRadius < 0) {
                     timingCircle.isTiming = false;
                     gameOver();
                 }
             }
         }
-        
+
         // ==========================================================
-        // ✨✨ 핵심 수정 부분 1: 판정 이펙트 애니메이션 수정
+        // ✨✨ 핵심 수정 부분 1: 판정 텍스트 사라질 때 반짝임 효과 추가
         // ==========================================================
         function drawJudgment() {
             if (judgment.alpha > 0) {
                 judgment.y += judgment.vy;
-                judgment.alpha -= 0.02; // 사라지는 속도
+                judgment.alpha -= 0.015; // 사라지는 속도 조절
 
-                // Pop 효과: 커졌다가 원래 크기로 돌아옴
-                if (judgment.scale > 1) {
-                    judgment.scale -= 0.04; 
-                } else {
-                    judgment.scale = 1;
+                // 텍스트가 거의 사라졌을 때 반짝임 생성
+                if (judgment.alpha < 0.2 && judgment.alpha > 0.1) {
+                    createSparkle(judgment.x, judgment.y, judgment.color);
                 }
-
-                ctx.save();
+                
+                ctx.fillStyle = judgment.color;
+                ctx.globalAlpha = judgment.alpha;
+                ctx.font = 'bold 48px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.shadowColor = 'black';
                 ctx.shadowBlur = 5;
-                
-                ctx.translate(judgment.x, judgment.y);
-                ctx.scale(judgment.scale, judgment.scale);
-                ctx.globalAlpha = Math.min(1, judgment.alpha); // 투명도 (최대 1)
-                
-                ctx.fillStyle = judgment.color;
-                ctx.font = 'bold 48px sans-serif';
-                ctx.fillText(judgment.text, 0, 0);
-
-                ctx.restore();
+                ctx.fillText(judgment.text, judgment.x, judgment.y);
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
             }
+        }
+
+        // ✨ 반짝임 파티클 생성 함수
+        function createSparkle(x, y, color) {
+            for (let i = 0; i < 5; i++) {
+                sparkleParticles.push({
+                    x: x,
+                    y: y,
+                    size: Math.random() * 8 + 4,
+                    speedX: (Math.random() - 0.5) * 3,
+                    speedY: (Math.random() - 0.5) * 3,
+                    alpha: 1,
+                    color: color
+                });
+            }
+        }
+
+        // ✨ 반짝임 파티클 그리기 및 업데이트 함수
+        function drawSparkles() {
+            sparkleParticles.forEach((p, index) => {
+                p.x += p.speedX;
+                p.y += p.speedY;
+                p.alpha -= 0.05;
+
+                if (p.alpha <= 0) {
+                    sparkleParticles.splice(index, 1);
+                }
+
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.translate(p.x, p.y);
+                ctx.rotate(Math.PI / 4);
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                ctx.restore();
+            });
         }
 
         function drawPointFeedback() {
             if (pointFeedback.alpha > 0) {
                 pointFeedback.y += pointFeedback.vy;
-                pointFeedback.alpha -= 0.02;
-
-                if (pointFeedback.scale > 1) {
-                    pointFeedback.scale -= 0.02;
-                } else {
-                    pointFeedback.scale = 1;
-                }
-                
-                ctx.save();
-                ctx.textAlign = 'center';
-                ctx.translate(pointFeedback.x, pointFeedback.y);
-                ctx.scale(pointFeedback.scale, pointFeedback.scale);
-                ctx.globalAlpha = Math.min(1, pointFeedback.alpha);
-
+                pointFeedback.alpha -= 0.015;
                 ctx.fillStyle = pointFeedback.color;
+                ctx.globalAlpha = pointFeedback.alpha;
                 ctx.font = 'bold 28px sans-serif';
-                ctx.fillText(pointFeedback.text, 0, 0);
-
-                ctx.restore();
+                ctx.textAlign = 'center';
+                ctx.fillText(pointFeedback.text, pointFeedback.x, pointFeedback.y);
+                ctx.globalAlpha = 1.0;
             }
         }
         
@@ -289,10 +298,8 @@
             }
             score += points;
             scoreEl.textContent = `SCORE: ${score}`;
-            
-            // ✨ Pop 효과를 위해 초기 scale과 alpha 값을 설정
-            judgment = { text: judgmentText, color: judgmentColor, alpha: 1.2, x: timingCircle.x, y: timingCircle.y - 20, vy: -1.5, scale: 1.4 };
-            pointFeedback = { text: `+${points}`, color: judgmentColor, alpha: 1.2, x: canvas.width / 2 + 80, y: 90, vy: -0.5, scale: 1.2 };
+            judgment = { text: judgmentText, color: judgmentColor, alpha: 1, x: timingCircle.x, y: timingCircle.y - 20, vy: -1 };
+            pointFeedback = { text: `+${points}`, color: judgmentColor, alpha: 1, x: canvas.width / 2 + 80, y: 90, vy: -0.5 };
             
             ball.vy = -18;
             timingCircle.isTiming = false;
@@ -330,6 +337,7 @@
             }
             drawJudgment();
             drawPointFeedback();
+            drawSparkles(); // ✨ 반짝임 그리기 호출
             requestAnimationFrame(gameLoop);
         }
 
@@ -351,7 +359,7 @@
             messageBox.style.display = 'block';
             gameLoop();
         }
-
+        
         init();
     </script>
 </body>
