@@ -20,7 +20,7 @@
             position: relative;
             width: 600px;
             height: 800px;
-            background-color: #275227;
+            background-color: #275227; /* 기본 잔디색 */
             border: 5px solid #fff;
             overflow: hidden;
         }
@@ -77,8 +77,7 @@
         const messageBox = document.getElementById('message-box');
 
         let score = 0;
-        let gameState = 'loading';
-        let canTrap = true;
+        let gameState = 'loading'; // loading, ready, playing, gameOver
 
         let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
         let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
@@ -90,21 +89,13 @@
             vy: 0,
             gravity: 0.4,
             slowVy: 0,
-            img: new Image()
+            img: new Image(),
+            rotation: 0
         };
-        
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분: 오류 없는 새 이미지 데이터로 교체
-        // ==========================================================
-        ball.img.src = 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4NCjxzdmcgdmVyc2lvbj0iMS4xIiBpZD0iTGF5ZXJfMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiDQoJIHZpZXdCb3g9IjAgMCA0NTUgNDU1IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA0NTUgNDU1OyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+DQo8Zz4NCgk8cGF0aCBkPSJNMjI3LjUsMEMxMDEuODU1LDAsMCwxMDEuODU1LDAsMjI3LjVTMTAxLjg1NSw0NTUsMjI3LjUsNDU1UzQ1NSwzNTMuMTQ1LDQ1NSwyMjcuNVMzNTMuMTQ1LDAsMjI3LjUsMHogTTIyNy41LDQxNy4zMTENCgkJQzEyMS43NjcsNDE3LjMxMiwzNy42ODgsMzMzLjIzMywzNy42ODgsMjI3LjVTMjEuNzY3LDM3LjY4OCwyMjcuNSwzNy42ODhTNDE3LjMxMiwxMjEuNzY3LDQxNy4zMTIsMjI3LjVTMzMyLjIzMyw0MTcuMzEyLDIyNy41LDQxNy4zMTJ6Ig0KCQkvPg0KCTxwYXRoIGQ9Ik0yMjcuNSw2MC44NzNjLTQ0Ljk3MywwLTgyLjM1OCwzNy4zODUtODIuMzU4LDgyLjM1OGMwLDQ0Ljk3MywzNy4zODUsODIuMzU4LDgyLjM1OCw4Mi4zNTgNCgkJYzQ0Ljk3MywwLDgyLjM1OC0zNy4zODUsODIuMzU4LTgyLjM1OEMzMDkuODU4LDk4LjI1OCwyNzIuNDczLDYwLjg3MywyMjcuNSw2MC44NzN6Ii8+DQoJPHBvbHlnb24gcG9pbnRzPSIxODMuNDM1LDE1OS4yMzQgMTYxLjUxLDE4OS41MjggMjAwLjI1OCwyMTIuMzM2IDIyNC4xNDEsMTg0LjAwNyAyMDIuNzY2LDE1My4zNTggIi8+DQoJPHBvbHlnb24gcG9pbnRzPSIxODUuNzgyLDI0NC4xNDIgMTU4LjEzNiwzMTEuMjczIDIwMi43NjYsMjkxLjY0MiAyMDcuMzU3LDIzNy4wMjMgIi8+DQoJPHBvbHlnb24gcG9pbnRzPSIyNzEuNTY1LDE1OS4yMzQgMjUzLjIzNCwxNTMuMzU4IDIzMC44NTksMTg0LjAwNyAyNTQuNzQyLDIxMi4zMzYgMjkzLjQ5LDE4OS41MjggIi8+DQoJPHBvbHlnb24gcG9pbnRzPSIxNDMuMjA1LDIyNy41IDE2MS41MTEsMjE1LjQ3MiAxMjMuNjQxLDIwNC40OCA5NS4xNTIsMjI3LjUgMTIzLjY0MSwyNTAuNTIyIDE2MS41MTEsMTg5LjUyOCAiLz4NCgk8cG9seWdvbiBwb2ludHM9IjMxMS43OTUsMjI3LjUgMjkzLjQ4OSwxODkuNTI4IDMzMS4zNTksMjA0LjQ4IDM1OS44NDgsMjI3LjUgMzMxLjM1OSwyNTAuNTIxIDI5My40OSwyMTUuNDcyICIv+DQoJPHBvbHlnb24gcG9pbnRzPSIyNjkuMjE4LDI0NC4xNDIgMjQ3LjY0MywyMzcuMDIzIDI1Mi43NjYsMjkxLjY0MiAyOTYuODU2LDMxMS4yNzMgIi8+DQoJPHBvbHlnb24gcG9pbnRzPSIxODAuMzYxLDMwMi4zNzkgMTU4LjEzNiwzMTEuMjczIDIwMC4yNTgsMjkyLjY2NCAyMjQuMTQxLDI2My45OTIgMjAyLjc2NiwyOTEuNjQyICIv+DQoJPHBvbHlnb24gcG9pbnRzPSIyNzQuNjM5LDMwMi4zNzkgMjUzLjIzNCwyOTEuNjQyIDIzMC44NTksMjYzLjk5MiAyNTQuNzQyLDI5MS42NjQgMjk2Ljg1十六章LDMxMS4yNzMgIi8+DQo8L2c+DQo8L3N2Zz4=';
-        
-        ball.img.onload = () => {
-            init(); // 이미지 로딩 완료 후 게임 시작
-        };
-        ball.img.onerror = () => {
-            messageBox.innerText = "게임 리소스 로딩 실패!";
-            messageBox.style.display = 'block';
-        };
+        ball.img.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjU2IDBDMTE0LjYgMCAwIDExNC42IDAgMjU2czExNC42IDI1NiAyNTYgMjU2IDI1Ni0xMTQuNiAyNTYtMjU2UzM5Ny40IDAgMjU2IDB6bTAgNDY5LjZjLTExNy44IDAtMjEzLjYtOTUuOC0yMTMuNi0yMTMuNlMzOC4xIDQyLjQgMjU2IDQyLjRjMTE3LjggMCAyMTMuNiA5NS44IDIxMy42IDIxMy42cy05NS44IDIxMy42LTIxMy42IDIxMy42em0xMy42LTEwMS4xYy0xMy44LTguNS0yMy45LTE1LjEtMjkuNC0xOS4zLTYuOS01LjItMTEuNi05LTEzLjItMTAuOWwtMy45LTQuNmMtNS40LTctNy4yLTEzLjctNS43LTIyLjMgMS4yLTcuMyA2LjYtMTQuOSAxNS43LTIyLjlsMTkuMS0xNi45YzguMy03LjQgMTguMS0xMy42IDI3LTE2LjQgMTguOS01LjggMzUuOS0uMyA0OC4zIDEzLjEgMTEuOCA١LjUgMTguNiAzNi4xIDE2LjYgNTQuMy0xLjggMTYuNC0xMC45IDI5LjktMjQuNSAzOC4yLTEzLjYgOC4zLTI5LjEgMTEuMi00Ni4xIDguMS00LjEgLS43LTcuNi0xLjgtMTAuMS0zLjEtNC40LTIuMi0xMC4xLTYuMy0xNy40LTEyLjcgMTIuNSAxMS4yIDI4LjQgMjAuNyA0Ni4xIDI1LjEgMTUuNSAzLjkgMzAuOCAyLjggNDQuMi0zLjEgMTkuMy04LjYgMzEuMi0yNC42IDMyLjMtNDQuM3MxLjItMzguMS0xMy44LTUyYy0xMS4yLTEwLjUtMjUuOC0xNS45LTQxLjctMTQuNC0xMy43IDEuMy0yNi45IDYuNS0zNy45IDE0LjYtMTAuOCA3LjktMjAgMTguMi0yNi4zIDI5LjktMi4xIDMuOS00LjYgOC4xLTYgMTMuM2wtMi43IDguMmMuMi4yLjMuNC41LjZsLjYgMS4yYy40IDEgMS4xIDIuMSAyLjEgMy41IDE0LjcgMTkuMSAzOC4yIDI2LjkgNjMuMSAyMy4yIDE4LjktMi44IDM1LjQtMTIuNyA0NS42LTI2LjYgMTAuOS0xNC40IDE1LjUtMzEuOCAxMy44LTUwLjUtMS43LTE4LjUtMTAuNC0zNS42LTI0LjUtNDQuMS0xNS4zLTkuMi0zMy4zLTEyLjQtNTEuMS05LjgtMTUuOCAyLjQtMzEuMSA4LjQtNDQuMiAxNi45LTkuOCA2LjQtMTguNyAxNC4xLTI2LjYgMjIuM2wtMTUgMTIuN2MtMTEuMyAxMC4xLTE2LjQgMjAuNC0xNy40IDI4LjQtMS4zIDEwLjgtMS41IDIwLjYgMS44IDI4LjcgMi41IDYuMiA3LjIgMTIgMTMuMyAxNS45bDIuMiAxLjljMjEuOSAxNC44IDQ5LjIgMTcuMyA3NS4zIDkuNCAxNS4xLTQuNiAyOC43LTEzLjIgNDAuMi0yNC4zbDYuMS02LjVjNC4yLTQuNSA3LjYtOS4zIDEwLjEtMTQuMyAzLjEtNi4zIDUuMi0xMy4xIDUuNy0yMC4xLjctOS45LS44LTE5LjMtNC45LTI3LjMtMTMuNy0yNi4yLTQyLjQtMzcuNS02OS45LTI5LjgtMjAuOC4zLTM5LjggMy45LTU1LjYgMTEuMy0xMi42IDYtMjMuNyAxNC0zMi42IDIyLjMtOS40IDguOC0xNy4zIDE4LjQtMjIuOSAyOC4xLTYuNSA3LjctMTUgMTQuMS0yMy44IDIyLjEtNi40IDYtMTIgMTEuMy0xNi41IDE1LjNsLTEzLjcgMTEuNmMtOS42IDguMy0xNy44IDE4LjMtMjIuOSAyOS4xLTEwLjcgMjIuMS0xMi45IDQ2LjktNS43IDcwLjMgNS41IDE4LjEgMTYuOSAzMy4zIDMwLjggNDQuMiA4LjggNy4xIDE4LjYgMTIuNSAyOC43IDE1LjYgNi40IDIgMTIuNyAzLjEgMTguNiAzLjFoMjQuOWMxMS42IDAgMjIuOS0yLjQgMzMuMy03LjIgMTYuNC03LjYgMjkuNC0yMC4zIDM2LjYtMzYuNnoiLz48L3N2Zz4=';
+        let imagesLoaded = false;
+        ball.img.onload = () => { imagesLoaded = true; };
+
 
         const timingCircle = {
             x: canvas.width / 2,
@@ -128,13 +119,13 @@
         }
 
         function drawBall() {
+            if (!imagesLoaded) return;
             if (gameState === 'playing' && !timingCircle.isTiming) {
                 ball.vy += ball.gravity;
                 ball.y += ball.vy;
 
                 if (ball.y >= canvas.height - 400 && ball.vy > 0) {
                     timingCircle.isTiming = true;
-                    canTrap = true;
                     timingCircle.shrinkingRadius = 150;
                     const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
                     const distanceToTravel = timingCircle.y - ball.y;
@@ -244,7 +235,6 @@
 
         function gameOver() {
             gameState = 'gameOver';
-            canTrap = false;
             messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 시작하려면 SPACE를 누르세요`;
             messageBox.style.display = 'block';
             timingCircle.isTiming = false;
@@ -259,7 +249,6 @@
             messageBox.style.display = 'none';
             timingCircle.isTiming = false;
             timingCircle.perfectRadius = getRandomRadius(30, 70);
-            canTrap = true;
             gameState = 'playing';
         }
 
@@ -278,8 +267,7 @@
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
-                if (gameState === 'playing' && canTrap) {
-                    canTrap = false;
+                if (gameState === 'playing') {
                     trap();
                 } else if (gameState === 'gameOver' || gameState === 'ready') {
                     resetGame();
@@ -294,6 +282,7 @@
             gameLoop();
         }
 
+        init();
     </script>
 </body>
 </html>
