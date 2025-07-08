@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (v2.1)</title>
+    <title>축구 트래핑 타이밍 게임</title>
     <style>
         body {
             display: flex;
@@ -10,7 +10,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #333;
+            background-color: #1a472a;
             font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
             color: white;
             text-align: center;
@@ -20,8 +20,7 @@
             position: relative;
             width: 600px;
             height: 800px;
-            background: url('https://images.pexels.com/photos/114296/pexels-photo-114296.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1') no-repeat center center;
-            background-size: cover;
+            background-color: #275227;
             border: 5px solid #fff;
             overflow: hidden;
         }
@@ -79,7 +78,10 @@
 
         let score = 0;
         let gameState = 'loading';
-        
+
+        // ✨ 핵심 수정 부분 1: 중복 입력을 막기 위한 잠금 변수 추가
+        let canTrap = true;
+
         let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
         let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
 
@@ -90,9 +92,13 @@
             vy: 0,
             gravity: 0.4,
             slowVy: 0,
-            img: new Image()
+            img: new Image(),
+            rotation: 0
         };
-        ball.img.src = 'https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg';
+        ball.img.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMjU2IDBDMTE0LjYgMCAwIDExNC42IDAgMjU2czExNC42IDI1NiAyNTYgMjU2IDI1Ni0xMTQuNiAyNTYtMjU2UzM5Ny40IDAgMjU2IDB6bTAgNDY5LjZjLTExNy44IDAtMjEzLjYtOTUuOC0yMTMuNi0yMTMuNlMzOC4xIDQyLjQgMjU2IDQyLjRjMTE3LjggMCAyMTMuNiA5NS44IDIxMy42IDIxMy42cy05NS44IDIxMy42LTIxMy42IDIxMy42em0xMy42LTEwMS4xYy0xMy44LTguNS0yMy45LTE1LjEtMjkuNC0xOS4zLTYuOS01LjItMTEuNi05LTEzLjItMTAuOWwtMy45LTQuNmMtNS40LTctNy4yLTEzLjctNS43LTIyLjMgMS4yLTcuMyA2LjYtMTQuOSAxNS43LTIyLjlsMTkuMS0xNi45YzguMy03LjQgMTguMS0xMy42IDI3LTE2LjQgMTguOS01LjggMzUuOS0uMyA0OC4zIDEzLjEgMTEuOCA١LjUgMTguNiAzNi4xIDE2LjYgNTQuMy0xLjggMTYuNC0xMC45IDI5LjktMjQuNSAzOC4yLTEzLjYgOC4zLTI5LjEgMTEuMi00Ni4xIDguMS00LjEgLS43LTcuNi0xLjgtMTAuMS0zLjEtNC40LTIuMi0xMC4xLTYuMy0xNy40LTEyLjcgMTIuNSAxMS4yIDI4LjQgMjAuNyA0Ni4xIDI1LjEgMTUuNSAzLjkgMzAuOCAyLjggNDQuMi0zLjEgMTkuMy04LjYgMzEuMi0yNC42IDMyLjMtNDQuM3MxLjItMzguMS0xMy44LTUyYy0xMS4yLTEwLjUtMjUuOC0xNS45LTQxLjctMTQuNC0xMy43IDEuMy0yNi45IDYuNS0zNy45IDE0LjYtMTAuOCA3LjktMjAgMTguMi0yNi4zIDI5LjktMi4xIDMuOS00LjYgOC4xLTYgMTMuM2wtMi43IDguMmMuMi4yLjMuNC41LjZsLjYgMS4yYy40IDEgMS4xIDIuMSAyLjEgMy41IDE0LjcgMTkuMSAzOC4yIDI2LjkgNjMuMSAyMy4yIDE4LjktMi44IDM1LjQtMTIuNyA0NS42LTI2LjYgMTAuOS0xNC40IDE1LjUtMzEuOCAxMy44LTUwLjUtMS43LTE4LjUtMTAuNC0zNS42LTI0LjUtNDQuMS0xNS4zLTkuMi0zMy4zLTEyLjQtNTEuMS05LjgtMTUuOCAyLjQtMzEuMSA4LjQtNDQuMiAxNi45LTkuOCA2LjQtMTguNyAxNC4xLTI2LjYgMjIuM2wtMTUgMTIuN2MtMTEuMyAxMC4xLTE2LjQgMjAuNC0xNy40IDI4LjQtMS4zIDEwLjgtMS41IDIwLjYgMS44IDI4LjcgMi41IDYuMiA3LjIgMTIgMTMuMyAxNS45bDIuMiAxLjljMjEuOSAxNC44IDQ5LjIgMTcuMyA3NS4zIDkuNCAxNS4xLTQuNiAyOC43LTEzLjIgNDAuMi0yNC4zbDYuMS02LjVjNC4yLTQuNSA3LjYtOS4zIDEwLjEtMTQuMyAzLjEtNi4zIDUuMi0xMy4xIDUuNy0yMC4xLjctOS45LS44LTE5LjMtNC45LTI3LjMtMTMuNy0yNi4yLTQyLjQtMzcuNS02OS45LTI5LjgtMjAuOC4zLTM5LjggMy45LTU1yjYgMTEuMy0xMi42IDYtMjMuNyAxNC0zMi42IDIyLjMtOS40IDguOC0xNy4zIDE4LjQtMjIuOSAyOC4xLTYuNSA3LjctMTUgMTQuMS0yMy44IDIyLjEtNi40IDYtMTIgMTEuMy0xNi41IDE1LjNsLTEzLjcgMTEuNmMtOS42IDguMy0xNy44IDE4LjMtMjIuOSAyOS4xLTEwLjcgMjIuMS0xMi45IDQ2LjktNS43IDcwLjMgNS41IDE4LjEgMTYuOSAzMy4zIDMwLjggNDQuMiA4LjggNy4xIDE4LjYgMTIuNSAyOC43IDE1LjYgNi40IDIgMTIuNyAzLjEgMTguNiAzLjFoMjQuOWMxMS42IDAgMjIuOS0yLjQgMzMuMy03LjIgMTYuNC03LjYgMjkuNC0yMC4zIDM2LjYtMzYuNnoiLz48L3N2Zz4=';
+        let imagesLoaded = false;
+        ball.img.onload = () => { imagesLoaded = true; };
+
 
         const timingCircle = {
             x: canvas.width / 2,
@@ -100,47 +106,46 @@
             perfectRadius: 50,
             shrinkingRadius: 150,
             shrinkSpeed: 2,
-            isTiming: false,
+            isTiming: false
         };
 
         function getRandomRadius(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
-
-        ball.img.onload = function() {
-            gameState = 'ready';
-            messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
-            messageBox.style.display = 'block';
-            gameLoop();
-        };
         
-        function drawBall() {
-            if (gameState === 'playing') {
-                if (timingCircle.isTiming) {
-                    ball.y += ball.slowVy;
-                } else {
-                    ball.vy += ball.gravity;
-                    ball.y += ball.vy;
-                    
-                    if (ball.y >= canvas.height - 400 && ball.vy > 0) {
-                        timingCircle.isTiming = true;
-                        timingCircle.shrinkingRadius = 150;
-                        const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
-                        const distanceToTravel = timingCircle.y - ball.y;
-                        ball.slowVy = distanceToTravel / framesToPerfect;
-                    }
-                }
-            }
-            if (gameState === 'playing' || gameState === 'gameOver') {
-                 ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
-            }
+        function drawField() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#318C31');
+            grad.addColorStop(1, '#276827');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
-        
+
+        function drawBall() {
+            if (!imagesLoaded) return;
+            if (gameState === 'playing' && !timingCircle.isTiming) {
+                ball.vy += ball.gravity;
+                ball.y += ball.vy;
+
+                if (ball.y >= canvas.height - 400 && ball.vy > 0) {
+                    timingCircle.isTiming = true;
+                    canTrap = true; // ✨ 다음 트랩을 위해 잠금 해제
+                    timingCircle.shrinkingRadius = 150;
+                    const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
+                    const distanceToTravel = timingCircle.y - ball.y;
+                    ball.slowVy = distanceToTravel / framesToPerfect;
+                }
+            } else if(timingCircle.isTiming){
+                ball.y += ball.slowVy;
+            }
+            ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
+        }
+
         function drawTimingCircle() {
             if (gameState === 'playing' && timingCircle.isTiming) {
                 const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
                 const maxDiffForColor = 50;
-                let ratio = Math.min(1, diff / maxDiffForColor);
+                let ratio = Math.min(1, diff / maxDiffForColor); 
                 let red = Math.floor(255 * ratio);
                 let green = Math.floor(255 * (1 - ratio));
                 const dynamicColor = `rgb(${red}, ${green}, 0)`;
@@ -167,13 +172,14 @@
                 ctx.stroke();
 
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
+
                 if (timingCircle.shrinkingRadius < 0) {
                     timingCircle.isTiming = false;
                     gameOver();
                 }
             }
         }
-        
+
         function drawJudgment() {
             if (judgment.alpha > 0) {
                 judgment.y += judgment.vy;
@@ -205,11 +211,8 @@
         
         function trap() {
             if (gameState !== 'playing' || !timingCircle.isTiming) return;
-
             const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
-            let points = 0;
-            let judgmentText = '';
-            let judgmentColor = '';
+            let points = 0, judgmentText = '', judgmentColor = '';
 
             if (diff <= 5) {
                 points = 10; judgmentText = 'PERFECT!'; judgmentColor = '#00FF7F';
@@ -223,33 +226,20 @@
                 gameOver();
                 return;
             }
-
             score += points;
             scoreEl.textContent = `SCORE: ${score}`;
-
-            judgment.text = judgmentText;
-            judgment.color = judgmentColor;
-            judgment.alpha = 1;
-            judgment.x = timingCircle.x;
-            judgment.y = timingCircle.y - 20;
-
-            // ==========================================================
-            // ✨✨ 핵심 수정 부분: 획득 점수 텍스트 위치 변경
-            // ==========================================================
-            pointFeedback.text = `+${points}`;
-            pointFeedback.color = judgmentColor;
-            pointFeedback.alpha = 1;
-            pointFeedback.x = canvas.width / 2 + 80; // SCORE 글자 오른쪽으로 위치 조정
-            pointFeedback.y = 90; // SCORE 텍스트 바로 아래로 y좌표 조정
+            judgment = { text: judgmentText, color: judgmentColor, alpha: 1, x: timingCircle.x, y: timingCircle.y - 20, vy: -1 };
+            pointFeedback = { text: `+${points}`, color: judgmentColor, alpha: 1, x: canvas.width / 2 + 80, y: 90, vy: -0.5 };
             
             ball.vy = -18;
             timingCircle.isTiming = false;
             timingCircle.shrinkSpeed += 0.1;
-            timingCircle.perfectRadius = getRandomRadius(35, 65);
+            timingCircle.perfectRadius = getRandomRadius(30, 70);
         }
 
         function gameOver() {
             gameState = 'gameOver';
+            canTrap = false; // ✨ 게임오버 시 입력 잠금
             messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 시작하려면 SPACE를 누르세요`;
             messageBox.style.display = 'block';
             timingCircle.isTiming = false;
@@ -262,34 +252,46 @@
             ball.vy = 0;
             timingCircle.shrinkSpeed = 2;
             messageBox.style.display = 'none';
+            timingCircle.isTiming = false;
+            timingCircle.perfectRadius = getRandomRadius(30, 70);
+            canTrap = true; // ✨ 게임 재시작 시 잠금 해제
             gameState = 'playing';
-            timingCircle.perfectRadius = getRandomRadius(35, 65);
         }
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+            drawField();
             if (gameState === 'playing' || gameState === 'gameOver') {
-                drawTimingCircle();
                 drawBall();
+                drawTimingCircle();
             }
+            drawJudgment();
             drawPointFeedback();
-            drawJudgment(); 
-            
             requestAnimationFrame(gameLoop);
         }
 
+        // ✨ 핵심 수정 부분 2: 키보드 이벤트 핸들러 수정
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
-                if (gameState === 'playing') {
+                // 'canTrap' 플래그가 true일 때만 trap() 함수 호출
+                if (gameState === 'playing' && canTrap) {
+                    canTrap = false; // ✨ 즉시 잠금
                     trap();
                 } else if (gameState === 'gameOver' || gameState === 'ready') {
                     resetGame();
                 }
             }
         });
-    </script>
+        
+        function init() {
+            gameState = 'ready';
+            messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
+            messageBox.style.display = 'block';
+            gameLoop();
+        }
 
+        init();
+    </script>
 </body>
 </html>
