@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (v2.3)</title>
+    <title>축구 트래핑 타이밍 게임 (v2.4)</title>
     <style>
         body {
             display: flex;
@@ -56,6 +56,7 @@
             padding: 20px 40px;
             border-radius: 15px;
             display: none;
+            line-height: 1.5;
         }
     </style>
 </head>
@@ -78,12 +79,11 @@
         const messageBox = document.getElementById('message-box');
 
         let score = 0;
+        // ✨ 트래핑 성공 횟수를 저장할 변수 추가
+        let trapCount = 0;
         let gameState = 'loading';
         let canTrap = true; 
         
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분 1: 판정 효과를 담을 배열로 변경
-        // ==========================================================
         let judgments = [];
         let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
 
@@ -132,7 +132,7 @@
                     
                     if (ball.y >= canvas.height - 400 && ball.vy > 0) {
                         timingCircle.isTiming = true;
-                        canTrap = true; // 새로운 타이밍 시퀀스 시작 시 입력 잠금 해제
+                        canTrap = true;
                         timingCircle.shrinkingRadius = 150;
                         const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
                         const distanceToTravel = timingCircle.y - ball.y;
@@ -183,9 +183,6 @@
             }
         }
         
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분 2: 판정 효과 배열을 순회하며 그리는 함수
-        // ==========================================================
         function drawJudgments() {
             for (let i = judgments.length - 1; i >= 0; i--) {
                 const j = judgments[i];
@@ -242,13 +239,12 @@
                 gameOver();
                 return;
             }
-
+            
+            // ✨ 트래핑 성공 시 점수와 횟수 증가
             score += points;
+            trapCount++;
             scoreEl.textContent = `SCORE: ${score}`;
 
-            // ==========================================================
-            // ✨✨ 핵심 수정 부분 3: 새로운 판정 효과를 배열에 추가
-            // ==========================================================
             judgments.push({
                 text: judgmentText,
                 color: judgmentColor,
@@ -273,13 +269,15 @@
         function gameOver() {
             gameState = 'gameOver';
             canTrap = false;
-            messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 시작하려면 SPACE를 누르세요`;
+            // ✨ 게임오버 메시지에 트래핑 횟수 추가
+            messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br>TOTAL TRAPS: ${trapCount}<br><br>다시 시작하려면 SPACE를 누르세요`;
             messageBox.style.display = 'block';
             timingCircle.isTiming = false;
         }
 
         function resetGame() {
             score = 0;
+            trapCount = 0; // ✨ 게임 재시작 시 횟수 초기화
             scoreEl.textContent = `SCORE: ${score}`;
             ball.y = 150;
             ball.vy = 0;
@@ -297,7 +295,7 @@
                 drawBall();
             }
             drawPointFeedback();
-            drawJudgments(); // ✨ 수정된 함수 호출
+            drawJudgments();
             
             requestAnimationFrame(gameLoop);
         }
@@ -306,7 +304,7 @@
             if (e.code === 'Space') {
                 e.preventDefault();
                 if (gameState === 'playing' && canTrap) {
-                    canTrap = false; // ✨ 한번 판정하면 바로 잠금
+                    canTrap = false;
                     trap();
                 } else if (gameState === 'gameOver' || gameState === 'ready') {
                     resetGame();
