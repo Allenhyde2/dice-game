@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임</title>
+    <title>축구 트래핑 타이밍 게임 (v2.2)</title>
     <style>
         body {
             display: flex;
@@ -10,7 +10,7 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #1a472a;
+            background-color: #333;
             font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
             color: white;
             text-align: center;
@@ -20,7 +20,8 @@
             position: relative;
             width: 600px;
             height: 800px;
-            background-color: #275227;
+            background: url('https://images.pexels.com/photos/114296/pexels-photo-114296.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1') no-repeat center center;
+            background-size: cover;
             border: 5px solid #fff;
             overflow: hidden;
         }
@@ -78,12 +79,11 @@
 
         let score = 0;
         let gameState = 'loading';
-        let canTrap = true;
-
+        // ✨ 중복 입력을 막기 위한 잠금 변수
+        let canTrap = true; 
+        
         let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
         let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
-        // ✨ 반짝임 효과를 위한 파티클 배열
-        const sparkleParticles = [];
 
         const ball = {
             x: canvas.width / 2,
@@ -92,93 +92,63 @@
             vy: 0,
             gravity: 0.4,
             slowVy: 0,
-            rotation: 0
+            img: new Image()
         };
-        
+        ball.img.src = 'https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg';
+
         const timingCircle = {
             x: canvas.width / 2,
             y: canvas.height - 200,
             perfectRadius: 50,
             shrinkingRadius: 150,
             shrinkSpeed: 2,
-            isTiming: false
+            isTiming: false,
         };
 
         function getRandomRadius(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
+
+        ball.img.onload = function() {
+            gameState = 'ready';
+            messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
+            messageBox.style.display = 'block';
+            gameLoop();
+        };
         
-        function drawField() {
-            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, '#318C31');
-            grad.addColorStop(1, '#276827');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
         function drawBall() {
-            if (gameState === 'playing' && !timingCircle.isTiming) {
-                ball.vy += ball.gravity;
-                ball.y += ball.vy;
-                ball.rotation += ball.vy * 0.01;
-
-                if (ball.y >= canvas.height - 400 && ball.vy > 0) {
-                    timingCircle.isTiming = true;
-                    canTrap = true;
-                    timingCircle.shrinkingRadius = 150;
-                    const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
-                    const distanceToTravel = timingCircle.y - ball.y;
-                    ball.slowVy = distanceToTravel / framesToPerfect;
+            if (gameState === 'playing') {
+                if (timingCircle.isTiming) {
+                    ball.y += ball.slowVy;
+                } else {
+                    ball.vy += ball.gravity;
+                    ball.y += ball.vy;
+                    
+                    if (ball.y >= canvas.height - 400 && ball.vy > 0) {
+                        timingCircle.isTiming = true;
+                        // ✨ 새로운 타이밍 시퀀스가 시작될 때만 입력을 허용
+                        canTrap = true; 
+                        timingCircle.shrinkingRadius = 150;
+                        const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
+                        const distanceToTravel = timingCircle.y - ball.y;
+                        ball.slowVy = distanceToTravel / framesToPerfect;
+                    }
                 }
-            } else if(timingCircle.isTiming){
-                ball.y += ball.slowVy;
-                ball.rotation += ball.slowVy * 0.02;
             }
-            
-            const x = ball.x, y = ball.y, radius = ball.radius;
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fillStyle = 'white';
-            ctx.fill();
-            const drawPolygon = (sides, centerX, centerY, size, rotation) => {
-                ctx.beginPath();
-                for (let i = 0; i < sides; i++) {
-                    const angle = (Math.PI * 2 / sides) * i + rotation;
-                    const px = centerX + Math.cos(angle) * size;
-                    const py = centerY + Math.sin(angle) * size;
-                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-                }
-                ctx.closePath(); ctx.fill();
-            };
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(ball.rotation);
-            const patchSize = radius * 0.4;
-            const patchDist = radius * 0.7;
-            ctx.fillStyle = 'black';
-            drawPolygon(5, 0, 0, patchSize, 0);
-            for (let i = 0; i < 5; i++) {
-                const angle = (Math.PI * 2 / 5) * i + Math.PI / 5;
-                const px = Math.cos(angle) * patchDist;
-                const py = Math.sin(angle) * patchDist;
-                drawPolygon(6, px, py, patchSize, 0);
+            if (gameState === 'playing' || gameState === 'gameOver') {
+                 ctx.drawImage(ball.img, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
             }
-            ctx.restore();
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            ctx.stroke();
         }
-
+        
         function drawTimingCircle() {
             if (gameState === 'playing' && timingCircle.isTiming) {
                 const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
                 const maxDiffForColor = 50;
-                let ratio = Math.min(1, diff / maxDiffForColor); 
+                let ratio = Math.min(1, diff / maxDiffForColor);
                 let red = Math.floor(255 * ratio);
                 let green = Math.floor(255 * (1 - ratio));
                 const dynamicColor = `rgb(${red}, ${green}, 0)`;
+
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = dynamicColor;
@@ -187,16 +157,19 @@
                 ctx.shadowColor = dynamicColor;
                 ctx.stroke();
                 ctx.shadowBlur = 0;
+
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.perfectRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 2;
                 ctx.stroke();
+
                 ctx.beginPath();
                 ctx.arc(timingCircle.x, timingCircle.y, timingCircle.shrinkingRadius, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
                 ctx.lineWidth = 3;
                 ctx.stroke();
+
                 timingCircle.shrinkingRadius -= timingCircle.shrinkSpeed;
                 if (timingCircle.shrinkingRadius < 0) {
                     timingCircle.isTiming = false;
@@ -204,20 +177,11 @@
                 }
             }
         }
-
-        // ==========================================================
-        // ✨✨ 핵심 수정 부분 1: 판정 텍스트 사라질 때 반짝임 효과 추가
-        // ==========================================================
+        
         function drawJudgment() {
             if (judgment.alpha > 0) {
                 judgment.y += judgment.vy;
-                judgment.alpha -= 0.015; // 사라지는 속도 조절
-
-                // 텍스트가 거의 사라졌을 때 반짝임 생성
-                if (judgment.alpha < 0.2 && judgment.alpha > 0.1) {
-                    createSparkle(judgment.x, judgment.y, judgment.color);
-                }
-                
+                judgment.alpha -= 0.01; 
                 ctx.fillStyle = judgment.color;
                 ctx.globalAlpha = judgment.alpha;
                 ctx.font = 'bold 48px sans-serif';
@@ -228,42 +192,6 @@
                 ctx.globalAlpha = 1.0;
                 ctx.shadowBlur = 0;
             }
-        }
-
-        // ✨ 반짝임 파티클 생성 함수
-        function createSparkle(x, y, color) {
-            for (let i = 0; i < 5; i++) {
-                sparkleParticles.push({
-                    x: x,
-                    y: y,
-                    size: Math.random() * 8 + 4,
-                    speedX: (Math.random() - 0.5) * 3,
-                    speedY: (Math.random() - 0.5) * 3,
-                    alpha: 1,
-                    color: color
-                });
-            }
-        }
-
-        // ✨ 반짝임 파티클 그리기 및 업데이트 함수
-        function drawSparkles() {
-            sparkleParticles.forEach((p, index) => {
-                p.x += p.speedX;
-                p.y += p.speedY;
-                p.alpha -= 0.05;
-
-                if (p.alpha <= 0) {
-                    sparkleParticles.splice(index, 1);
-                }
-
-                ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
-                ctx.translate(p.x, p.y);
-                ctx.rotate(Math.PI / 4);
-                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-                ctx.restore();
-            });
         }
 
         function drawPointFeedback() {
@@ -281,8 +209,11 @@
         
         function trap() {
             if (gameState !== 'playing' || !timingCircle.isTiming) return;
+
             const diff = Math.abs(timingCircle.shrinkingRadius - timingCircle.perfectRadius);
-            let points = 0, judgmentText = '', judgmentColor = '';
+            let points = 0;
+            let judgmentText = '';
+            let judgmentColor = '';
 
             if (diff <= 5) {
                 points = 10; judgmentText = 'PERFECT!'; judgmentColor = '#00FF7F';
@@ -296,20 +227,31 @@
                 gameOver();
                 return;
             }
+
             score += points;
             scoreEl.textContent = `SCORE: ${score}`;
-            judgment = { text: judgmentText, color: judgmentColor, alpha: 1, x: timingCircle.x, y: timingCircle.y - 20, vy: -1 };
-            pointFeedback = { text: `+${points}`, color: judgmentColor, alpha: 1, x: canvas.width / 2 + 80, y: 90, vy: -0.5 };
+
+            judgment.text = judgmentText;
+            judgment.color = judgmentColor;
+            judgment.alpha = 1;
+            judgment.x = timingCircle.x;
+            judgment.y = timingCircle.y - 20;
+
+            pointFeedback.text = `+${points}`;
+            pointFeedback.color = judgmentColor;
+            pointFeedback.alpha = 1;
+            pointFeedback.x = canvas.width / 2 + 80;
+            pointFeedback.y = 90;
             
             ball.vy = -18;
             timingCircle.isTiming = false;
             timingCircle.shrinkSpeed += 0.1;
-            timingCircle.perfectRadius = getRandomRadius(30, 70);
+            timingCircle.perfectRadius = getRandomRadius(35, 65);
         }
 
         function gameOver() {
             gameState = 'gameOver';
-            canTrap = false;
+            canTrap = false; // ✨ 게임 오버 시 입력 비활성화
             messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 시작하려면 SPACE를 누르세요`;
             messageBox.style.display = 'block';
             timingCircle.isTiming = false;
@@ -322,45 +264,36 @@
             ball.vy = 0;
             timingCircle.shrinkSpeed = 2;
             messageBox.style.display = 'none';
-            timingCircle.isTiming = false;
-            timingCircle.perfectRadius = getRandomRadius(30, 70);
-            canTrap = true;
             gameState = 'playing';
+            timingCircle.perfectRadius = getRandomRadius(35, 65);
         }
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawField();
+
             if (gameState === 'playing' || gameState === 'gameOver') {
-                drawBall();
                 drawTimingCircle();
+                drawBall();
             }
-            drawJudgment();
             drawPointFeedback();
-            drawSparkles(); // ✨ 반짝임 그리기 호출
+            drawJudgment(); 
+            
             requestAnimationFrame(gameLoop);
         }
 
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
+                // ✨ canTrap 플래그를 확인하여 중복 호출 방지
                 if (gameState === 'playing' && canTrap) {
-                    canTrap = false;
+                    canTrap = false; // ✨ 한번 판정하면 바로 잠금
                     trap();
                 } else if (gameState === 'gameOver' || gameState === 'ready') {
                     resetGame();
                 }
             }
         });
-        
-        function init() {
-            gameState = 'ready';
-            messageBox.innerHTML = `스페이스를 눌러<br>게임을 시작하세요!`;
-            messageBox.style.display = 'block';
-            gameLoop();
-        }
-        
-        init();
     </script>
+
 </body>
 </html>
