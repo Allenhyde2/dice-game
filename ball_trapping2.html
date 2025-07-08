@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>축구 트래핑 타이밍 게임 (v2.1)</title>
+    <title>축구 트래핑 타이밍 게임 (v2.2)</title>
     <style>
         body {
             display: flex;
@@ -79,6 +79,8 @@
 
         let score = 0;
         let gameState = 'loading';
+        // ✨ 중복 입력을 막기 위한 잠금 변수
+        let canTrap = true; 
         
         let judgment = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -1 };
         let pointFeedback = { text: '', color: '', alpha: 0, x: 0, y: 0, vy: -0.5 };
@@ -124,6 +126,8 @@
                     
                     if (ball.y >= canvas.height - 400 && ball.vy > 0) {
                         timingCircle.isTiming = true;
+                        // ✨ 새로운 타이밍 시퀀스가 시작될 때만 입력을 허용
+                        canTrap = true; 
                         timingCircle.shrinkingRadius = 150;
                         const framesToPerfect = (timingCircle.shrinkingRadius - timingCircle.perfectRadius) / timingCircle.shrinkSpeed;
                         const distanceToTravel = timingCircle.y - ball.y;
@@ -233,14 +237,11 @@
             judgment.x = timingCircle.x;
             judgment.y = timingCircle.y - 20;
 
-            // ==========================================================
-            // ✨✨ 핵심 수정 부분: 획득 점수 텍스트 위치 변경
-            // ==========================================================
             pointFeedback.text = `+${points}`;
             pointFeedback.color = judgmentColor;
             pointFeedback.alpha = 1;
-            pointFeedback.x = canvas.width / 2 + 80; // SCORE 글자 오른쪽으로 위치 조정
-            pointFeedback.y = 90; // SCORE 텍스트 바로 아래로 y좌표 조정
+            pointFeedback.x = canvas.width / 2 + 80;
+            pointFeedback.y = 90;
             
             ball.vy = -18;
             timingCircle.isTiming = false;
@@ -250,6 +251,7 @@
 
         function gameOver() {
             gameState = 'gameOver';
+            canTrap = false; // ✨ 게임 오버 시 입력 비활성화
             messageBox.innerHTML = `GAME OVER<br>FINAL SCORE: ${score}<br><br>다시 시작하려면 SPACE를 누르세요`;
             messageBox.style.display = 'block';
             timingCircle.isTiming = false;
@@ -282,7 +284,9 @@
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
-                if (gameState === 'playing') {
+                // ✨ canTrap 플래그를 확인하여 중복 호출 방지
+                if (gameState === 'playing' && canTrap) {
+                    canTrap = false; // ✨ 한번 판정하면 바로 잠금
                     trap();
                 } else if (gameState === 'gameOver' || gameState === 'ready') {
                     resetGame();
